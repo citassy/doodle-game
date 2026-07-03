@@ -241,13 +241,19 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                 onChange={handleAutoAdvanceChange}
                 label="canvas changes automatically"
               />
-              {eligibleForMixing && (
-                <Toggle
-                  checked={room.mix_drawings}
-                  onChange={handleMixDrawingsChange}
-                  label="mix up whose drawing gets guessed"
-                />
+              
+              <Toggle
+                checked={room.mix_drawings}
+                onChange={handleMixDrawingsChange}
+                label="mix up whose drawing gets guessed"
+                disabled={!eligibleForMixing}
+              />
+              {!eligibleForMixing && (
+                <p className="text-xs text-ink/40 -mt-1 mb-1">
+                  needs at least {room.word_giver_mode === "computer" ? "2 players" : "3 players (1 word giver + 2 drawers)"}
+                </p>
               )}
+              
               <SecondsStepper
                 label="time to draw each word"
                 value={room.draw_seconds}

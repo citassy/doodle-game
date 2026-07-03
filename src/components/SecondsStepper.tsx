@@ -1,7 +1,7 @@
 "use client";
 
-const STEP = 30;
-const MIN = 3;
+const STEP = 0.5;
+const MIN = 1;
 
 export function SecondsStepper({
   label,
@@ -18,7 +18,7 @@ export function SecondsStepper({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => onChange(Math.max(MIN, value - STEP))}
+          onClick={() => onChange(Math.max(MIN, Math.round((value - STEP) * 10) / 10))}
           className="w-7 h-7 rounded-full border-[1.5px] border-ink flex items-center justify-center font-hand text-lg"
           aria-label={`Decrease ${label}`}
         >
@@ -27,7 +27,7 @@ export function SecondsStepper({
         <span className="font-hand text-base w-14 text-center">{formatSeconds(value)}</span>
         <button
           type="button"
-          onClick={() => onChange(value + STEP)}
+          onClick={() => onChange(Math.round((value + STEP) * 10) / 10)}
           className="w-7 h-7 rounded-full border-[1.5px] border-ink flex items-center justify-center font-hand text-lg"
           aria-label={`Increase ${label}`}
         >
@@ -39,8 +39,6 @@ export function SecondsStepper({
 }
 
 function formatSeconds(s: number): string {
-  if (s < 60) return `${s}s`;
-  const minutes = Math.floor(s / 60);
-  const seconds = s % 60;
-  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  const rounded = Math.round(s * 10) / 10;
+  return `${rounded}s`;
 }
