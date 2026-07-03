@@ -6,6 +6,7 @@ import { fetchDrawingsForRound } from "@/lib/drawings";
 import { fetchRoundGuesses, beginGuessCountdown, endGame } from "@/lib/guessing";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
+import { NumberPicker } from "@/components/NumberPicker";
 import { Button } from "@/components/Button";
 import type { Room, Player, RoomWord, Drawing, Guess } from "@/lib/database.types";
 
@@ -63,6 +64,15 @@ export function RoundResults({
     }
   }
 
+  async function handlePickNumber(n: number) {
+    setBusy(true);
+    try {
+      await beginGuessCountdown(room.id, room.revealed_numbers, n);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleEndGame() {
     setBusy(true);
     try {
@@ -110,18 +120,47 @@ export function RoundResults({
           })}
         </div>
 
-        {me.is_host && (
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={handleEndGame} disabled={busy}>
-              End game
-            </Button>
-            {!isLastRound && (
-              <Button onClick={handleNextRound} disabled={busy}>
-                Next round →
-              </Button>
-            )}
-          </div>
-        )}
+        {(() => {
+          const isPlayerWordGiver = room.word_giver_mode === "player";
+          const isWordGiver = isPlayerWordGiver && me.id === room.word_giver_player_id;
+
+          if (isPlayerWordGiver && !isLastRound) {
+            return isWordGiver ? (
+              <div className="mt-6">
+                <p className="text-sm text-ink/50 mb-2 text-center">pick the next drawing to guess</p>
+                <div className="max-w-xs mx-auto">
+                  <NumberPicker revealed={room.revealed_numbers} onPick={handlePickNumber} disabled={busy} />
+                </div>
+                {me.is_host && (
+                  <div className="flex justify-center mt-4">
+                    <Button variant="secondary" onClick={handleEndGame} disabled={busy}>
+                      End game
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-base text-ink/40 text-center mt-6">
+                waiting for the word giver to pick the next drawing…
+              </p>
+            );
+          }
+
+          return (
+            me.is_host && (
+              <div className="flex justify-end gap-3 mt-6">
+                <Button variant="secondary" onClick={handleEndGame} disabled={busy}>
+                  End game
+                </Button>
+                {!isLastRound && (
+                  <Button onClick={handleNextRound} disabled={busy}>
+                    Next round →
+                  </Button>
+                )}
+              </div>
+            )
+          );
+        })()}
       </div>
     </main>
   );

@@ -8,12 +8,18 @@ function pickRandomUnrevealed(revealed: number[]): number {
   return remaining[Math.floor(Math.random() * remaining.length)];
 }
 
-// Appends one freshly-picked round number to revealed_numbers and starts a
-// short 3-2-1 countdown before the guess timer itself begins. Used both to
-// kick off the very first guess round and for every "next round" after.
-export async function beginGuessCountdown(roomId: string, currentRevealed: number[]) {
+// Appends one round number to revealed_numbers and starts a short 3-2-1
+// countdown before the guess timer itself begins. Used both to kick off the
+// very first guess round and for every "next round" after. If `chosenTarget`
+// is provided (the word-giver manually picking a number), that's used
+// instead of a random pick.
+export async function beginGuessCountdown(
+  roomId: string,
+  currentRevealed: number[],
+  chosenTarget?: number
+) {
   const supabase = createClient();
-  const target = pickRandomUnrevealed(currentRevealed);
+  const target = chosenTarget ?? pickRandomUnrevealed(currentRevealed);
   const nextRevealed = [...currentRevealed, target];
   const deadline = new Date(Date.now() + COUNTDOWN_SECONDS * 1000).toISOString();
   const { error } = await supabase

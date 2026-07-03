@@ -2,12 +2,10 @@ import { createClient } from "@/lib/supabase/client";
 import { generateRoomCode } from "@/lib/roomCode";
 import { colorForIndex, getLocalPlayerId } from "@/lib/localPlayer";
 import { selectComputerWords } from "@/lib/wordSelection";
-import type { WordGiverMode } from "@/lib/database.types";
+import { WORD_REVEAL_SECONDS, PREP_SECONDS } from "@/lib/constants";
+import type { WordGiverMode, WordGiverTiming } from "@/lib/database.types";
 
 export class RoomError extends Error {}
-
-const WORD_REVEAL_SECONDS = 3.5;
-const PREP_SECONDS = 150; // 2.5 minutes for a player word-giver to write 20 words
 
 export async function setWordGiverMode(
   roomId: string,
@@ -22,7 +20,13 @@ export async function setWordGiverMode(
   if (error) throw new RoomError(error.message);
 }
 
-export async function startGame(roomId: string, mode: WordGiverMode) {
+export async function setWordGiverTiming(roomId: string, timing: WordGiverTiming) {
+  const supabase = createClient();
+  const { error } = await supabase.from("rooms").update({ word_giver_timing: timing }).eq("id", roomId);
+  if (error) throw new RoomError(error.message);
+}
+
+export async function startGame(roomId: string, mode: WordGiverMode, timing: WordGiverTiming) {
   const supabase = createClient();
 
   if (mode === "computer") {
@@ -41,11 +45,19 @@ export async function startGame(roomId: string, mode: WordGiverMode) {
       .update({ status: "drawing", current_round: 1, phase_deadline: deadline })
       .eq("id", roomId);
     if (error) throw new RoomError(error.message);
-  } else {
+  } else if (timing === "ahead_of_time") {
     const deadline = new Date(Date.now() + PREP_SECONDS * 1000).toISOString();
     const { error } = await supabase
       .from("rooms")
       .update({ status: "prep", phase_deadline: deadline })
+      .eq("id", roomId);
+    if (error) throw new RoomError(error.message);
+  } else {
+    // round_by_round: no prep phase, no timer — go straight to drawing with
+    // current_round at 0 until the word-giver submits round 1's word.
+    const { error } = await supabase
+      .from("rooms")
+      .update({ status: "drawing", current_round: 0, phase_deadline: null })
       .eq("id", roomId);
     if (error) throw new RoomError(error.message);
   }

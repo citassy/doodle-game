@@ -20,8 +20,17 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
   const [finishing, setFinishing] = useState(false);
   const savingRef = useRef(false);
 
+  // `me.part1_done` is the single source of truth for "am I done" — it only
+  // becomes true when the player explicitly clicks Finish (see below), never
+  // just from autosaving a drawing. It comes from the realtime player row,
+  // so this stays correct across refreshes too.
   const iAmDone = me.part1_done;
 
+  // One-time setup: load the room's word list and figure out where this
+  // player left off (derived from how many drawings they've already saved,
+  // so a mid-game refresh resumes in the right place with no extra state).
+  // Note: reaching round 20's drawing doesn't mean they clicked Finish, so
+  // we clamp here rather than mark them done.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -39,6 +48,8 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount
   }, []);
 
+  // Hydrate the canvas whenever the personal round changes (covers both
+  // normal advancing and the refresh-resume case above).
   useEffect(() => {
     if (personalRound == null || iAmDone) return;
     let cancelled = false;
@@ -54,6 +65,8 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
   const broadcastWord = words?.find((w) => w.round_number === room.current_round)?.word_text ?? "";
   const lastSpokenRound = useRef<number | null>(null);
 
+  // Announce the broadcast word the moment it's revealed to the room,
+  // regardless of which canvas the player is actually drawing on.
   useEffect(() => {
     if (!broadcastWord || muted) return;
     if (lastSpokenRound.current === room.current_round) return;
@@ -104,6 +117,8 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [advance]);
 
+  const isRoundByRound = room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
+
   if (iAmDone) {
     return (
       <main className="flex-1 flex items-center justify-center px-6">
@@ -124,11 +139,26 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     );
   }
 
+  if (isRoundByRound && room.current_round === 0) {
+    return (
+      <main className="flex-1 flex items-center justify-center px-6">
+        <p className="font-hand text-2xl text-ink/60 text-center">waiting for the first word…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-3">
-          {room.current_round < TOTAL_ROUNDS ? (
+          {isRoundByRound ? (
+            <span
+              className="w-7 h-7 rounded-full border-2 border-border-muted flex items-center justify-center text-xs"
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+          ) : room.current_round < TOTAL_ROUNDS ? (
             <CountdownRing deadline={room.phase_deadline} durationSeconds={WORD_REVEAL_SECONDS} />
           ) : (
             <span
@@ -140,9 +170,9 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
           )}
           <div className="flex-1">
             <span className="text-sm text-ink/50">
-              {room.current_round < TOTAL_ROUNDS
-                ? `word ${room.current_round} of ${TOTAL_ROUNDS}`
-                : "last word — finish whenever you're ready"}
+              {!isRoundByRound && room.current_round >= TOTAL_ROUNDS
+                ? "last word — finish whenever you're ready"
+                : `word ${room.current_round} of ${TOTAL_ROUNDS}`}
             </span>
             <div className="font-hand text-2xl font-bold">{broadcastWord}</div>
           </div>
@@ -164,7 +194,11 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
               {room.current_round - personalRound} word{room.current_round - personalRound > 1 ? "s" : ""} ahead
             </span>
           )}
-          <DrawingCanvas key={personalRound} initialStrokes={strokes} onChange={handleStrokesChange} />
+          <DrawingCanvas
+            key={personalRound}
+            initialStrokes={strokes}
+            onChange={handleStrokesChange}
+          />
         </div>
 
         <Button onClick={advance} disabled={(!isLastRound && !canAdvance) || finishing} className="w-full mt-3">

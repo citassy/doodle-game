@@ -3,7 +3,7 @@
 import { use, useState } from "react";
 import { useRoomRealtime } from "@/hooks/useRoomRealtime";
 import { getLocalPlayerId } from "@/lib/localPlayer";
-import { setWordGiverMode, startGame, RoomError } from "@/lib/room";
+import { setWordGiverMode, setWordGiverTiming, startGame, RoomError } from "@/lib/room";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { DrawingRound } from "@/components/DrawingRound";
@@ -11,8 +11,13 @@ import { TransitionScreen, CountdownScreen } from "@/components/PhaseInterstitia
 import { GuessingRound } from "@/components/GuessingRound";
 import { RoundResults } from "@/components/RoundResults";
 import { FinalResults } from "@/components/FinalResults";
-import type { WordGiverMode } from "@/lib/database.types";
+import { WordGiverPrepScreen } from "@/components/WordGiverPrepScreen";
+import { WaitingForWordsScreen } from "@/components/WaitingForWordsScreen";
+import { WatchDrawingsLive } from "@/components/WatchDrawingsLive";
+import { WordGiverFirstPickScreen } from "@/components/WordGiverFirstPickScreen";
 import { useHostGuessingController } from "@/hooks/useHostGuessingController";
+import { useHostPrepController } from "@/hooks/useHostPrepController";
+import type { WordGiverMode, WordGiverTiming } from "@/lib/database.types";
 
 export default function RoomPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -23,6 +28,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const myId = getLocalPlayerId();
   const isHost = players.find((p) => p.client_id === myId)?.is_host ?? false;
   useHostGuessingController(room, isHost);
+  useHostPrepController(room, isHost);
 
   if (loading) {
     return <CenteredMessage>loading room…</CenteredMessage>;
@@ -34,12 +40,25 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   const me = players.find((p) => p.client_id === myId);
 
+  const isWordGiver = room.word_giver_mode === "player" && me?.id === room.word_giver_player_id;
+
+  if (room.status === "prep") {
+    if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    if (isWordGiver) return <WordGiverPrepScreen room={room} />;
+    const giver = players.find((p) => p.id === room.word_giver_player_id);
+    return <WaitingForWordsScreen room={room} giver={giver} />;
+  }
+
   if (room.status === "drawing") {
     if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    if (isWordGiver) {
+      return <WatchDrawingsLive room={room} players={players.filter((p) => p.id !== me.id)} />;
+    }
     return <DrawingRound room={room} me={me} />;
   }
 
   if (room.status === "transition") {
+    if (isWordGiver) return <WordGiverFirstPickScreen room={room} />;
     return <TransitionScreen />;
   }
 
@@ -72,12 +91,21 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
+  async function handleTimingChange(timing: WordGiverTiming) {
+    if (!room) return;
+    try {
+      await setWordGiverTiming(room.id, timing);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    }
+  }
+
   async function handleStart() {
     if (!room) return;
     setError("");
     setStarting(true);
     try {
-      await startGame(room.id, room.word_giver_mode);
+      await startGame(room.id, room.word_giver_mode, room.word_giver_timing);
     } catch (err) {
       setError(err instanceof RoomError ? err.message : "Something went wrong.");
     } finally {
@@ -137,6 +165,20 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                   ))}
               </select>
             </label>
+
+            {room.word_giver_mode === "player" && (
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-ink/50">when do they give words?</span>
+                <select
+                  className="w-full border-[1.5px] border-ink rounded-lg px-3 py-2.5 bg-paper text-base"
+                  value={room.word_giver_timing}
+                  onChange={(e) => handleTimingChange(e.target.value as WordGiverTiming)}
+                >
+                  <option value="ahead_of_time">All ahead of time (2.5 min to write 20)</option>
+                  <option value="round_by_round">One at a time, round by round</option>
+                </select>
+              </label>
+            )}
 
             {error && <p className="text-base text-coral-text">{error}</p>}
 

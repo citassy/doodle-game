@@ -9,6 +9,7 @@ export type RoomStatus =
   | "finished";
 
 export type WordGiverMode = "computer" | "player";
+export type WordGiverTiming = "ahead_of_time" | "round_by_round";
 
 export interface Room {
   id: string;
@@ -17,6 +18,7 @@ export interface Room {
   status: RoomStatus;
   word_giver_mode: WordGiverMode;
   word_giver_player_id: string | null;
+  word_giver_timing: WordGiverTiming;
   current_round: number;
   phase_deadline: string | null;
   revealed_numbers: number[];
@@ -35,8 +37,8 @@ export interface Player {
   is_word_giver: boolean;
   score: number;
   connected: boolean;
-  joined_at: string;
   part1_done: boolean;
+  joined_at: string;
 }
 
 export interface Word {

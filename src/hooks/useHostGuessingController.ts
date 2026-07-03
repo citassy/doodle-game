@@ -19,6 +19,7 @@ export function useHostGuessingController(room: Room | null, isHost: boolean) {
       if (busy.current || !room) return;
 
       if (room.status === "transition") {
+        if (room.word_giver_mode === "player") return; // word-giver picks manually instead
         busy.current = true;
         try {
           await beginGuessCountdown(room.id, room.revealed_numbers);
