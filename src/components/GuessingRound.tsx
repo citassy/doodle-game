@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchRoomWords } from "@/lib/roomWords";
 import { getDrawing } from "@/lib/drawings";
 import { getMyGuess, submitGuess } from "@/lib/guessing";
-import { GUESS_SECONDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
 import { TextInput } from "@/components/TextInput";
@@ -33,12 +32,14 @@ export function GuessingRound({ room, me }: { room: Room; me: Player }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- word list is static for the whole game
   }, []);
 
+  const sourcePlayerId = room.mix_drawings ? room.drawing_source_map[me.id] ?? me.id : me.id;
+
   useEffect(() => {
     if (targetRound == null) return;
     let cancelled = false;
     (async () => {
       const [drawing, existingGuess] = await Promise.all([
-        getDrawing(room.id, me.id, targetRound),
+        getDrawing(room.id, sourcePlayerId, targetRound),
         getMyGuess(room.id, me.id, targetRound),
       ]);
       if (cancelled) return;
@@ -51,7 +52,7 @@ export function GuessingRound({ room, me }: { room: Room; me: Player }) {
     return () => {
       cancelled = true;
     };
-  }, [targetRound, room.id, me.id]);
+  }, [targetRound, room.id, me.id, sourcePlayerId]);
 
   const correctWord = words?.find((w) => w.round_number === targetRound)?.word_text ?? "";
 
@@ -93,7 +94,7 @@ export function GuessingRound({ room, me }: { room: Room; me: Player }) {
     <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-3">
-          <CountdownRing deadline={room.phase_deadline} durationSeconds={GUESS_SECONDS} />
+          <CountdownRing deadline={room.phase_deadline} durationSeconds={room.guess_seconds} />
           {submitted ? (
             <TextInput value={guessText} disabled className="flex-1 opacity-60" />
           ) : (

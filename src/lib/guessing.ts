@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { COUNTDOWN_SECONDS, GUESS_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
+import { COUNTDOWN_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
 
 function pickRandomUnrevealed(revealed: number[]): number {
   const remaining = Array.from({ length: TOTAL_ROUNDS }, (_, i) => i + 1).filter(
@@ -34,9 +34,9 @@ export async function beginGuessCountdown(
   if (error) throw new Error(error.message);
 }
 
-export async function startGuessTimer(roomId: string) {
+export async function startGuessTimer(roomId: string, guessSeconds: number) {
   const supabase = createClient();
-  const deadline = new Date(Date.now() + GUESS_SECONDS * 1000).toISOString();
+  const deadline = new Date(Date.now() + guessSeconds * 1000).toISOString();
   const { error } = await supabase
     .from("rooms")
     .update({ status: "guessing", phase_deadline: deadline })

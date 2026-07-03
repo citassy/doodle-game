@@ -33,7 +33,7 @@ export function WordGiverPrepScreen({ room }: { room: Room }) {
     setError("");
     setSubmitting(true);
     try {
-      await submitWordGiverWords(room.id, finalWords);
+      await submitWordGiverWords(room.id, finalWords, room.draw_seconds);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setSubmitting(false);
@@ -70,7 +70,17 @@ export function WordGiverPrepScreen({ room }: { room: Room }) {
           className="flex gap-2 mb-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (index < TOTAL_ROUNDS - 1) commitCurrent(index + 1);
+            if (index < TOTAL_ROUNDS - 1) {
+              commitCurrent(index + 1);
+              return;
+            }
+            // Last word: commit it, and if that completes all 20, start.
+            const updated = [...words];
+            updated[index] = current.trim();
+            setWords(updated);
+            if (updated.every((w) => w.trim())) {
+              handleSubmit(updated);
+            }
           }}
         >
           <TextInput
@@ -79,8 +89,8 @@ export function WordGiverPrepScreen({ room }: { room: Room }) {
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
           />
-          <Button type="submit" variant="secondary" disabled={!current.trim() || index >= TOTAL_ROUNDS - 1}>
-            Next
+          <Button type="submit" variant="secondary" disabled={!current.trim()}>
+            {index >= TOTAL_ROUNDS - 1 ? "Finish" : "Next"}
           </Button>
         </form>
 

@@ -29,7 +29,11 @@ export function FinalResults({ room, me, players }: { room: Room; me: Player; pl
     };
   }, [room.id]);
 
-  const ranked = [...players].sort((a, b) => b.score - a.score);
+    const scorers =
+    room.word_giver_mode === "player"
+      ? players.filter((p) => p.id !== room.word_giver_player_id)
+      : players;
+  const ranked = [...scorers].sort((a, b) => b.score - a.score);
 
   async function handlePlayAgain() {
     setResetting(true);

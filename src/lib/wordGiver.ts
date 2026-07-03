@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { selectComputerWords } from "@/lib/wordSelection";
-import { WORD_REVEAL_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
+import { TOTAL_ROUNDS } from "@/lib/constants";
 
 export async function getRoomWordsCount(roomId: string): Promise<number> {
   const supabase = createClient();
@@ -16,7 +16,7 @@ export async function getRoomWordsCount(roomId: string): Promise<number> {
 
 // Called by the word-giver once they've written all 20 (or want to submit
 // early). Saves the words and immediately starts round 1.
-export async function submitWordGiverWords(roomId: string, words: string[]) {
+export async function submitWordGiverWords(roomId: string, words: string[], drawSeconds: number) {
   if (words.length !== TOTAL_ROUNDS || words.some((w) => !w.trim())) {
     throw new Error(`Need exactly ${TOTAL_ROUNDS} non-empty words.`);
   }
@@ -31,7 +31,7 @@ export async function submitWordGiverWords(roomId: string, words: string[]) {
   });
   if (wordsError) throw new Error(wordsError.message);
 
-  const deadline = new Date(Date.now() + WORD_REVEAL_SECONDS * 1000).toISOString();
+  const deadline = new Date(Date.now() + drawSeconds * 1000).toISOString();
   const { error } = await supabase
     .from("rooms")
     .update({ status: "drawing", current_round: 1, phase_deadline: deadline })
@@ -43,7 +43,7 @@ export async function submitWordGiverWords(roomId: string, words: string[]) {
 // they're still typing, distracted, or their tab died), fill in whatever
 // rounds they didn't finish with computer-picked words so the game isn't
 // stuck waiting on one person indefinitely.
-export async function finalizePrepWithFallback(roomId: string) {
+export async function finalizePrepWithFallback(roomId: string, drawSeconds: number) {
   const supabase = createClient();
   const { data: existing, error: fetchError } = await supabase
     .from("room_words")
@@ -69,7 +69,7 @@ export async function finalizePrepWithFallback(roomId: string) {
     if (insertError) throw new Error(insertError.message);
   }
 
-  const deadline = new Date(Date.now() + WORD_REVEAL_SECONDS * 1000).toISOString();
+  const deadline = new Date(Date.now() + drawSeconds * 1000).toISOString();
   const { error } = await supabase
     .from("rooms")
     .update({ status: "drawing", current_round: 1, phase_deadline: deadline })

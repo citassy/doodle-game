@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { haveAllPlayersFinishedPart1 } from "@/lib/drawings";
-import { WORD_REVEAL_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
+import { TOTAL_ROUNDS } from "@/lib/constants";
 import type { Room } from "@/lib/database.types";
 
 export function useHostRoundBroadcast(room: Room | null, isHost: boolean) {
@@ -21,7 +21,7 @@ export function useHostRoundBroadcast(room: Room | null, isHost: boolean) {
         const deadline = new Date(room.phase_deadline).getTime();
         if (Date.now() >= deadline) {
           const nextRound = room.current_round + 1;
-          const nextDeadline = new Date(Date.now() + WORD_REVEAL_SECONDS * 1000).toISOString();
+          const nextDeadline = new Date(Date.now() + room.draw_seconds * 1000).toISOString();
           await supabase
             .from("rooms")
             .update({ current_round: nextRound, phase_deadline: nextDeadline })

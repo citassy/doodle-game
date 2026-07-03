@@ -15,7 +15,7 @@ export function useHostPrepController(room: Room | null, isHost: boolean) {
       if (Date.now() < new Date(room.phase_deadline).getTime()) return;
       busy.current = true;
       try {
-        await finalizePrepWithFallback(room.id);
+        await finalizePrepWithFallback(room.id, room.draw_seconds);
       } finally {
         busy.current = false;
       }

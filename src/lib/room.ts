@@ -2,8 +2,8 @@ import { createClient } from "@/lib/supabase/client";
 import { generateRoomCode } from "@/lib/roomCode";
 import { colorForIndex, getLocalPlayerId } from "@/lib/localPlayer";
 import { selectComputerWords } from "@/lib/wordSelection";
-import { WORD_REVEAL_SECONDS, PREP_SECONDS } from "@/lib/constants";
-import type { WordGiverMode, WordGiverTiming } from "@/lib/database.types";
+import { PREP_SECONDS } from "@/lib/constants";
+import type { Room, WordGiverMode, WordGiverTiming } from "@/lib/database.types";
 
 export class RoomError extends Error {}
 
@@ -26,39 +26,103 @@ export async function setWordGiverTiming(roomId: string, timing: WordGiverTiming
   if (error) throw new RoomError(error.message);
 }
 
-export async function startGame(roomId: string, mode: WordGiverMode, timing: WordGiverTiming) {
+export async function setAutoAdvanceCanvas(roomId: string, value: boolean) {
+  const supabase = createClient();
+  const { error } = await supabase.from("rooms").update({ auto_advance_canvas: value }).eq("id", roomId);
+  if (error) throw new RoomError(error.message);
+}
+
+export async function setMixDrawings(roomId: string, value: boolean) {
+  const supabase = createClient();
+  const { error } = await supabase.from("rooms").update({ mix_drawings: value }).eq("id", roomId);
+  if (error) throw new RoomError(error.message);
+}
+
+export async function setDrawSeconds(roomId: string, seconds: number) {
+  const supabase = createClient();
+  const { error } = await supabase.from("rooms").update({ draw_seconds: seconds }).eq("id", roomId);
+  if (error) throw new RoomError(error.message);
+}
+
+export async function setGuessSeconds(roomId: string, seconds: number) {
+  const supabase = createClient();
+  const { error } = await supabase.from("rooms").update({ guess_seconds: seconds }).eq("id", roomId);
+  if (error) throw new RoomError(error.message);
+}
+
+// Builds a fixed-point-free mapping (nobody maps to themselves): shuffle the
+// ids, then assign each one the next id in the shuffled order, wrapping
+// around. This is what "mixed drawings" uses to decide whose doodle each
+// player sees during guessing.
+function buildDrawingSourceMap(playerIds: string[]): Record<string, string> {
+  const shuffled = [...playerIds];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const map: Record<string, string> = {};
+  shuffled.forEach((id, i) => {
+    map[id] = shuffled[(i + 1) % shuffled.length];
+  });
+  return map;
+}
+
+export async function startGame(room: Room) {
   const supabase = createClient();
 
-  if (mode === "computer") {
+  const { data: allPlayers, error: playersError } = await supabase
+    .from("players")
+    .select("id")
+    .eq("room_id", room.id);
+  if (playersError) throw new RoomError(playersError.message);
+
+  const drawerIds = (allPlayers ?? [])
+    .map((p) => p.id)
+    .filter((id) => !(room.word_giver_mode === "player" && id === room.word_giver_player_id));
+
+  const drawingSourceMap =
+    room.mix_drawings && drawerIds.length >= 2 ? buildDrawingSourceMap(drawerIds) : {};
+
+  if (room.word_giver_mode === "computer") {
     const words = await selectComputerWords(20);
     const rows = words.map((word_text, i) => ({
-      room_id: roomId,
+      room_id: room.id,
       round_number: i + 1,
       word_text,
     }));
     const { error: wordsError } = await supabase.from("room_words").insert(rows);
     if (wordsError) throw new RoomError(wordsError.message);
 
-    const deadline = new Date(Date.now() + WORD_REVEAL_SECONDS * 1000).toISOString();
+    const deadline = new Date(Date.now() + room.draw_seconds * 1000).toISOString();
     const { error } = await supabase
       .from("rooms")
-      .update({ status: "drawing", current_round: 1, phase_deadline: deadline })
-      .eq("id", roomId);
+      .update({
+        status: "drawing",
+        current_round: 1,
+        phase_deadline: deadline,
+        drawing_source_map: drawingSourceMap,
+      })
+      .eq("id", room.id);
     if (error) throw new RoomError(error.message);
-  } else if (timing === "ahead_of_time") {
+  } else if (room.word_giver_timing === "ahead_of_time") {
     const deadline = new Date(Date.now() + PREP_SECONDS * 1000).toISOString();
     const { error } = await supabase
       .from("rooms")
-      .update({ status: "prep", phase_deadline: deadline })
-      .eq("id", roomId);
+      .update({ status: "prep", phase_deadline: deadline, drawing_source_map: drawingSourceMap })
+      .eq("id", room.id);
     if (error) throw new RoomError(error.message);
   } else {
     // round_by_round: no prep phase, no timer — go straight to drawing with
     // current_round at 0 until the word-giver submits round 1's word.
     const { error } = await supabase
       .from("rooms")
-      .update({ status: "drawing", current_round: 0, phase_deadline: null })
-      .eq("id", roomId);
+      .update({
+        status: "drawing",
+        current_round: 0,
+        phase_deadline: null,
+        drawing_source_map: drawingSourceMap,
+      })
+      .eq("id", room.id);
     if (error) throw new RoomError(error.message);
   }
 }

@@ -91,8 +91,13 @@ export function RoundResults({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">
           {drawers.map((p) => {
-            const drawing = drawings.find((d) => d.player_id === p.id);
+            const sourceId = room.mix_drawings ? room.drawing_source_map[p.id] ?? p.id : p.id;
+            const drawing = drawings.find((d) => d.player_id === sourceId);
             const guess = guesses.find((g) => g.player_id === p.id);
+            const sourceName =
+              room.mix_drawings && sourceId !== p.id
+                ? drawers.find((d) => d.id === sourceId)?.name
+                : null;
             return (
               <div key={p.id} className="text-center">
                 <div className="relative">
@@ -104,6 +109,7 @@ export function RoundResults({
                   <DrawingCanvas initialStrokes={drawing?.strokes ?? []} onChange={() => {}} disabled />
                 </div>
                 <p className="text-base font-medium mt-2">{p.name}</p>
+                {sourceName && <p className="text-xs text-ink/40">(drew by {sourceName})</p>}
                 <p
                   className={`font-hand text-lg ${
                     guess?.is_correct ? "text-green-text" : guess ? "text-coral-text" : "text-ink/40"

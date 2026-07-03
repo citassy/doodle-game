@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchRoomWords } from "@/lib/roomWords";
 import { getMyDrawingCount, getDrawing, saveDrawing, markPart1Done } from "@/lib/drawings";
-import { WORD_REVEAL_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
+import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
 import { Button } from "@/components/Button";
@@ -44,6 +44,15 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount
   }, []);
+
+  // Auto-advance mode: the canvas always mirrors the broadcast round exactly
+  // — no lag, no manual control. Whatever was drawn when the word changes is
+  // final for that round.
+  useEffect(() => {
+    if (!room.auto_advance_canvas || iAmDone || room.current_round === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local round to an external prop (the broadcast round), not derived render state
+    setPersonalRound(Math.min(room.current_round, TOTAL_ROUNDS));
+  }, [room.auto_advance_canvas, room.current_round, iAmDone]);
 
   // Hydrate the canvas whenever the personal round changes (covers both
   // normal advancing and the refresh-resume case above).
@@ -116,9 +125,10 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
       }
       return;
     }
+    if (room.auto_advance_canvas) return; // canvas advances on its own
     if (!canAdvance) return;
     setPersonalRound(personalRound + 1);
-  }, [personalRound, isLastRound, canAdvance, finishing, room.id, me.id]);
+  }, [personalRound, isLastRound, canAdvance, finishing, room.id, me.id, room.auto_advance_canvas]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -132,6 +142,9 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
   }, [advance]);
 
   const isRoundByRound = room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
+  // With auto-advance on, there's never anything to click except the final
+  // Finish once the last round arrives — no Next button in between.
+  const showAdvanceButton = isLastRound || !room.auto_advance_canvas;
 
   if (iAmDone) {
     return (
@@ -173,7 +186,7 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
               ✎
             </span>
           ) : room.current_round < TOTAL_ROUNDS ? (
-            <CountdownRing deadline={room.phase_deadline} durationSeconds={WORD_REVEAL_SECONDS} />
+            <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} />
           ) : (
             <span
               className="w-7 h-7 rounded-full border-2 border-coral flex items-center justify-center text-xs"
@@ -203,7 +216,7 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
           <span className="absolute top-2 left-2.5 z-10 font-hand text-lg text-ink/40">
             {personalRound}
           </span>
-          {canAdvance && (
+          {canAdvance && !room.auto_advance_canvas && (
             <span className="absolute top-2 right-2.5 z-10 text-xs text-coral-text bg-coral/40 rounded-full px-2 py-0.5">
               {room.current_round - personalRound} word{room.current_round - personalRound > 1 ? "s" : ""} ahead
             </span>
@@ -215,10 +228,16 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
           />
         </div>
 
-        <Button onClick={advance} disabled={(!isLastRound && !canAdvance) || finishing} className="w-full mt-3">
-          {isLastRound ? (finishing ? "Finishing…" : "Finish") : "Next → (or hit space)"}
-        </Button>
-        {!isLastRound && !canAdvance && (
+        {showAdvanceButton && (
+          <Button
+            onClick={advance}
+            disabled={(!isLastRound && !canAdvance) || finishing}
+            className="w-full mt-3"
+          >
+            {isLastRound ? (finishing ? "Finishing…" : "Finish") : "Next → (or hit space)"}
+          </Button>
+        )}
+        {showAdvanceButton && !isLastRound && !canAdvance && (
           <p className="text-sm text-ink/40 text-center mt-2">waiting for the next word…</p>
         )}
       </div>

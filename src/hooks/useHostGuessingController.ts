@@ -33,7 +33,7 @@ export function useHostGuessingController(room: Room | null, isHost: boolean) {
         if (Date.now() >= new Date(room.phase_deadline).getTime()) {
           busy.current = true;
           try {
-            await startGuessTimer(room.id);
+            await startGuessTimer(room.id, room.guess_seconds);
           } finally {
             busy.current = false;
           }

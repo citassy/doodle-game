@@ -3,9 +3,20 @@
 import { use, useState } from "react";
 import { useRoomRealtime } from "@/hooks/useRoomRealtime";
 import { getLocalPlayerId } from "@/lib/localPlayer";
-import { setWordGiverMode, setWordGiverTiming, startGame, RoomError } from "@/lib/room";
+import {
+  setWordGiverMode,
+  setWordGiverTiming,
+  setAutoAdvanceCanvas,
+  setMixDrawings,
+  setDrawSeconds,
+  setGuessSeconds,
+  startGame,
+  RoomError,
+} from "@/lib/room";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
+import { Toggle } from "@/components/Toggle";
+import { SecondsStepper } from "@/components/SecondsStepper";
 import { DrawingRound } from "@/components/DrawingRound";
 import { TransitionScreen, CountdownScreen } from "@/components/PhaseInterstitials";
 import { GuessingRound } from "@/components/GuessingRound";
@@ -105,12 +116,48 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
+  async function handleAutoAdvanceChange(value: boolean) {
+    if (!room) return;
+    try {
+      await setAutoAdvanceCanvas(room.id, value);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    }
+  }
+
+  async function handleMixDrawingsChange(value: boolean) {
+    if (!room) return;
+    try {
+      await setMixDrawings(room.id, value);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    }
+  }
+
+  async function handleDrawSecondsChange(value: number) {
+    if (!room) return;
+    try {
+      await setDrawSeconds(room.id, value);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    }
+  }
+
+  async function handleGuessSecondsChange(value: number) {
+    if (!room) return;
+    try {
+      await setGuessSeconds(room.id, value);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    }
+  }
+
   async function handleStart() {
     if (!room) return;
     setError("");
     setStarting(true);
     try {
-      await startGame(room.id, room.word_giver_mode, room.word_giver_timing);
+      await startGame(room);
     } catch (err) {
       setError(err instanceof RoomError ? err.message : "Something went wrong.");
     } finally {
@@ -118,8 +165,11 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
+  const eligibleForMixing =
+    room.word_giver_mode === "computer" ? players.length >= 2 : players.length >= 3;
+
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+    <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8 py-8">
       <div className="w-full max-w-sm bg-paper border-2 border-ink rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="font-hand font-bold text-xl bg-coral text-coral-text rounded-md px-2 -rotate-1 inline-block">
@@ -184,6 +234,31 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                 </select>
               </label>
             )}
+
+            <div className="border-t border-border-muted pt-2 mt-1 flex flex-col gap-1">
+              <Toggle
+                checked={room.auto_advance_canvas}
+                onChange={handleAutoAdvanceChange}
+                label="canvas changes automatically"
+              />
+              {eligibleForMixing && (
+                <Toggle
+                  checked={room.mix_drawings}
+                  onChange={handleMixDrawingsChange}
+                  label="mix up whose drawing gets guessed"
+                />
+              )}
+              <SecondsStepper
+                label="time to draw each word"
+                value={room.draw_seconds}
+                onChange={handleDrawSecondsChange}
+              />
+              <SecondsStepper
+                label="time to guess each word"
+                value={room.guess_seconds}
+                onChange={handleGuessSecondsChange}
+              />
+            </div>
 
             {error && <p className="text-base text-coral-text">{error}</p>}
 
