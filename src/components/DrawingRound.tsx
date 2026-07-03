@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchRoomWords } from "@/lib/roomWords";
 import { getMyDrawingCount, getDrawing, saveDrawing, markPart1Done } from "@/lib/drawings";
-import { useHostRoundBroadcast } from "@/hooks/useHostRoundBroadcast";
 import { WORD_REVEAL_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
@@ -11,8 +10,6 @@ import { Button } from "@/components/Button";
 import type { Room, Player, RoomWord, StrokePoint } from "@/lib/database.types";
 
 export function DrawingRound({ room, me }: { room: Room; me: Player }) {
-  useHostRoundBroadcast(room, me.is_host);
-
   const [words, setWords] = useState<RoomWord[] | null>(null);
   const [personalRound, setPersonalRound] = useState<number | null>(null);
   const [strokes, setStrokes] = useState<StrokePoint[][]>([]);
@@ -64,6 +61,23 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
 
   const broadcastWord = words?.find((w) => w.round_number === room.current_round)?.word_text ?? "";
   const lastSpokenRound = useRef<number | null>(null);
+
+  // Words can arrive progressively (round-by-round word-giver mode adds one
+  // at a time, live, while people are already drawing), so re-fetch whenever
+  // the broadcast round advances rather than relying on the one-time fetch
+  // above. Cheap query (max 20 rows), safe to run every round regardless of
+  // mode.
+  useEffect(() => {
+    if (room.current_round === 0) return;
+    let cancelled = false;
+    (async () => {
+      const roomWords = await fetchRoomWords(room.id);
+      if (!cancelled) setWords(roomWords);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [room.current_round, room.id]);
 
   // Announce the broadcast word the moment it's revealed to the room,
   // regardless of which canvas the player is actually drawing on.

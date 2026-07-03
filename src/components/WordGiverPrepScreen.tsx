@@ -47,6 +47,14 @@ export function WordGiverPrepScreen({ room }: { room: Room }) {
     return preview.every((w) => w.trim()) ? preview : null;
   })();
 
+  // Live preview including whatever's currently being typed, so the list
+  // below updates as you type (helps catch duplicates before committing).
+  const displayWords = (() => {
+    const preview = [...words];
+    if (current.trim()) preview[index] = current.trim();
+    return preview;
+  })();
+
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-md">
@@ -97,6 +105,34 @@ export function WordGiverPrepScreen({ room }: { room: Room }) {
             </button>
           ))}
         </div>
+
+        {displayWords.some((w) => w.trim()) && (
+          <div className="border-[1.5px] border-border-muted rounded-lg mb-4 max-h-40 overflow-y-auto">
+            {(() => {
+              const counts = new Map<string, number>();
+              for (const w of displayWords) {
+                const key = w.trim().toLowerCase();
+                if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+              }
+              return displayWords.map((w, i) => {
+                if (!w.trim()) return null;
+                const isDuplicate = (counts.get(w.trim().toLowerCase()) ?? 0) > 1;
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-baseline gap-2 px-3 py-1.5 border-b border-border-muted last:border-b-0 ${
+                      isDuplicate ? "bg-coral/10" : ""
+                    }`}
+                  >
+                    <span className="text-sm text-ink/40 w-5">{i + 1}.</span>
+                    <span className={`text-base ${isDuplicate ? "text-coral-text" : ""}`}>{w}</span>
+                    {isDuplicate && <span className="text-xs text-coral-text ml-auto">duplicate</span>}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        )}
 
         {error && <p className="text-base text-coral-text mb-2">{error}</p>}
 

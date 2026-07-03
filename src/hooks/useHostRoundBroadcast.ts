@@ -6,13 +6,14 @@ import { haveAllPlayersFinishedPart1 } from "@/lib/drawings";
 import { WORD_REVEAL_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
 import type { Room } from "@/lib/database.types";
 
-export function useHostRoundBroadcast(room: Room, isHost: boolean) {
+export function useHostRoundBroadcast(room: Room | null, isHost: boolean) {
   const checkingFinish = useRef(false);
 
   useEffect(() => {
-    if (!isHost || room.status !== "drawing") return;
+    if (!isHost || !room || room.status !== "drawing") return;
 
     const tick = async () => {
+      if (!room) return;
       const supabase = createClient();
 
       // Advance the shared word-reveal schedule.
@@ -29,9 +30,11 @@ export function useHostRoundBroadcast(room: Room, isHost: boolean) {
         }
       }
 
-      // Once every word has been revealed, start polling for "has everyone
-      // explicitly clicked Finish on round 20 yet" to move to the
-      // transition screen. Guard against overlapping checks with a ref flag.
+      // Once every word has been revealed (either the fixed schedule ran
+      // its course, or the word-giver has manually given all 20 in
+      // round-by-round mode), start polling for "has everyone explicitly
+      // clicked Finish on round 20 yet" to move to the transition screen.
+      // Guard against overlapping checks with a ref flag.
       if (room.current_round >= TOTAL_ROUNDS && !checkingFinish.current) {
         checkingFinish.current = true;
         try {
@@ -52,5 +55,6 @@ export function useHostRoundBroadcast(room: Room, isHost: boolean) {
     }, 500);
 
     return () => clearInterval(interval);
-  }, [isHost, room.status, room.current_round, room.phase_deadline, room.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally narrow, same pattern as other host controller hooks
+  }, [isHost, room?.status, room?.current_round, room?.phase_deadline, room?.id]);
 }

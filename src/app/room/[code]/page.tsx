@@ -17,6 +17,7 @@ import { WatchDrawingsLive } from "@/components/WatchDrawingsLive";
 import { WordGiverFirstPickScreen } from "@/components/WordGiverFirstPickScreen";
 import { useHostGuessingController } from "@/hooks/useHostGuessingController";
 import { useHostPrepController } from "@/hooks/useHostPrepController";
+import { useHostRoundBroadcast } from "@/hooks/useHostRoundBroadcast";
 import type { WordGiverMode, WordGiverTiming } from "@/lib/database.types";
 
 export default function RoomPage({ params }: { params: Promise<{ code: string }> }) {
@@ -29,6 +30,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const isHost = players.find((p) => p.client_id === myId)?.is_host ?? false;
   useHostGuessingController(room, isHost);
   useHostPrepController(room, isHost);
+  useHostRoundBroadcast(room, isHost);
 
   if (loading) {
     return <CenteredMessage>loading room…</CenteredMessage>;
