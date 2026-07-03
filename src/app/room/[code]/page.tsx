@@ -15,6 +15,7 @@ import { WordGiverPrepScreen } from "@/components/WordGiverPrepScreen";
 import { WaitingForWordsScreen } from "@/components/WaitingForWordsScreen";
 import { WatchDrawingsLive } from "@/components/WatchDrawingsLive";
 import { WordGiverFirstPickScreen } from "@/components/WordGiverFirstPickScreen";
+import { WordGiverGuessView } from "@/components/WordGiverGuessView";
 import { useHostGuessingController } from "@/hooks/useHostGuessingController";
 import { useHostPrepController } from "@/hooks/useHostPrepController";
 import { useHostRoundBroadcast } from "@/hooks/useHostRoundBroadcast";
@@ -70,12 +71,14 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   if (room.status === "guessing") {
     if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    if (isWordGiver) return <WordGiverGuessView room={room} me={me} players={players} />;
     const targetRound = room.revealed_numbers[room.revealed_numbers.length - 1];
     return <GuessingRound key={targetRound} room={room} me={me} />;
   }
 
   if (room.status === "round_results") {
     if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    if (isWordGiver) return <WordGiverGuessView room={room} me={me} players={players} />;
     return <RoundResults room={room} me={me} players={players} />;
   }
 

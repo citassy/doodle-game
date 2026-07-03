@@ -44,7 +44,10 @@ export function useHostGuessingController(room: Room | null, isHost: boolean) {
       if (room.status === "guessing" && room.phase_deadline) {
         const targetRound = room.revealed_numbers[room.revealed_numbers.length - 1];
         const timedOut = Date.now() >= new Date(room.phase_deadline).getTime();
-        const allDone = timedOut ? true : await haveAllPlayersGuessed(room.id, targetRound);
+        const excludePlayerId = room.word_giver_mode === "player" ? room.word_giver_player_id : null;
+        const allDone = timedOut
+          ? true
+          : await haveAllPlayersGuessed(room.id, targetRound, excludePlayerId);
         if (allDone) {
           busy.current = true;
           try {

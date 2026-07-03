@@ -120,16 +120,29 @@ export async function fetchRoundGuesses(roomId: string, roundNumber: number) {
   return data ?? [];
 }
 
-export async function haveAllPlayersGuessed(roomId: string, roundNumber: number): Promise<boolean> {
+export async function haveAllPlayersGuessed(
+  roomId: string,
+  roundNumber: number,
+  excludePlayerId?: string | null
+): Promise<boolean> {
   const supabase = createClient();
-  const [{ count: totalCount }, { count: guessCount }] = await Promise.all([
-    supabase.from("players").select("id", { count: "exact", head: true }).eq("room_id", roomId),
-    supabase
-      .from("guesses")
-      .select("id", { count: "exact", head: true })
-      .eq("room_id", roomId)
-      .eq("round_number", roundNumber),
-  ]);
+
+  let totalQuery = supabase
+    .from("players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId);
+  let guessQuery = supabase
+    .from("guesses")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .eq("round_number", roundNumber);
+
+  if (excludePlayerId) {
+    totalQuery = totalQuery.neq("id", excludePlayerId);
+    guessQuery = guessQuery.neq("player_id", excludePlayerId);
+  }
+
+  const [{ count: totalCount }, { count: guessCount }] = await Promise.all([totalQuery, guessQuery]);
   if (totalCount == null || guessCount == null) return false;
   return totalCount > 0 && guessCount >= totalCount;
 }
