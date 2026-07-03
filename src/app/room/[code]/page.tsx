@@ -1,0 +1,161 @@
+"use client";
+
+import { use, useState } from "react";
+import { useRoomRealtime } from "@/hooks/useRoomRealtime";
+import { getLocalPlayerId } from "@/lib/localPlayer";
+import { setWordGiverMode, startGame, RoomError } from "@/lib/room";
+import { Avatar } from "@/components/Avatar";
+import { Button } from "@/components/Button";
+import { DrawingRound } from "@/components/DrawingRound";
+import { TransitionScreen, CountdownScreen } from "@/components/PhaseInterstitials";
+import { GuessingRound } from "@/components/GuessingRound";
+import { RoundResults } from "@/components/RoundResults";
+import { FinalResults } from "@/components/FinalResults";
+import type { WordGiverMode } from "@/lib/database.types";
+import { useHostGuessingController } from "@/hooks/useHostGuessingController";
+
+export default function RoomPage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = use(params);
+  const { room, players, loading, notFound } = useRoomRealtime(code);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
+
+  const myId = getLocalPlayerId();
+  const isHost = players.find((p) => p.client_id === myId)?.is_host ?? false;
+  useHostGuessingController(room, isHost);
+
+  if (loading) {
+    return <CenteredMessage>loading room…</CenteredMessage>;
+  }
+
+  if (notFound || !room) {
+    return <CenteredMessage>couldn&apos;t find room {code.toUpperCase()}</CenteredMessage>;
+  }
+
+  const me = players.find((p) => p.client_id === myId);
+
+  if (room.status === "drawing") {
+    if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    return <DrawingRound room={room} me={me} />;
+  }
+
+  if (room.status === "transition") {
+    return <TransitionScreen />;
+  }
+
+  if (room.status === "countdown") {
+    return <CountdownScreen room={room} />;
+  }
+
+  if (room.status === "guessing") {
+    if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    const targetRound = room.revealed_numbers[room.revealed_numbers.length - 1];
+    return <GuessingRound key={targetRound} room={room} me={me} />;
+  }
+
+  if (room.status === "round_results") {
+    if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    return <RoundResults room={room} me={me} players={players} />;
+  }
+
+  if (room.status === "finished") {
+    if (!me) return <CenteredMessage>you&apos;re not in this room</CenteredMessage>;
+    return <FinalResults room={room} me={me} players={players} />;
+  }
+
+  async function handleModeChange(mode: WordGiverMode, wordGiverPlayerId: string | null) {
+    if (!room) return;
+    try {
+      await setWordGiverMode(room.id, mode, wordGiverPlayerId);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    }
+  }
+
+  async function handleStart() {
+    if (!room) return;
+    setError("");
+    setStarting(true);
+    try {
+      await startGame(room.id, room.word_giver_mode);
+    } catch (err) {
+      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  return (
+    <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
+      <div className="w-full max-w-sm bg-paper border-2 border-ink rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-hand font-bold text-xl bg-coral text-coral-text rounded-md px-2 -rotate-1 inline-block">
+            {room.code}
+          </span>
+          <span className="text-sm text-ink/50">room code</span>
+        </div>
+
+        <div className="flex flex-col gap-1.5 mb-4">
+          {players.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center gap-2 border-[1.5px] border-border-muted rounded-lg px-2.5 py-1.5"
+            >
+              <Avatar name={p.name} color={p.color} size={24} />
+              <span className="text-base">{p.name}</span>
+              {p.is_host && <span className="ml-auto font-hand text-base text-coral-text">host</span>}
+            </div>
+          ))}
+          {players.length < 2 && (
+            <p className="text-sm text-ink/40 text-center border-[1.5px] border-dashed border-border-muted rounded-lg px-2.5 py-1.5">
+              you can start solo, or share the room code above
+            </p>
+          )}
+        </div>
+
+        {isHost ? (
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm text-ink/50">word giver</span>
+              <select
+                className="w-full border-[1.5px] border-ink rounded-lg px-3 py-2.5 bg-paper text-base"
+                value={room.word_giver_mode === "player" ? room.word_giver_player_id ?? "" : "computer"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "computer") handleModeChange("computer", null);
+                  else handleModeChange("player", v);
+                }}
+                disabled={players.length < 2}
+              >
+                <option value="computer">Computer</option>
+                {players
+                  .filter((p) => p.id !== me?.id || players.length > 1)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            {error && <p className="text-base text-coral-text">{error}</p>}
+
+            <Button onClick={handleStart} disabled={starting}>
+              {starting ? "Starting…" : "Start"}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-base text-ink/50 text-center pt-1">waiting for the host to start…</p>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function CenteredMessage({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="flex-1 flex items-center justify-center px-6">
+      <p className="font-hand text-3xl text-ink/60">{children}</p>
+    </main>
+  );
+}
