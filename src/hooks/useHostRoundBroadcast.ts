@@ -38,7 +38,9 @@ export function useHostRoundBroadcast(room: Room | null, isHost: boolean) {
       if (room.current_round >= TOTAL_ROUNDS && !checkingFinish.current) {
         checkingFinish.current = true;
         try {
-          const allDone = await haveAllPlayersFinishedPart1(room.id);
+          const excludePlayerId =
+            room.word_giver_mode === "player" ? room.word_giver_player_id : null;
+          const allDone = await haveAllPlayersFinishedPart1(room.id, excludePlayerId);
           if (allDone) {
             await supabase.from("rooms").update({ status: "transition" }).eq("id", room.id);
           }

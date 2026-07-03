@@ -60,8 +60,6 @@ export async function fetchDrawingsForRound(roomId: string, roundNumber: number)
   return data ?? [];
 }
 
-// Returns true if every player currently in the room has a saved drawing
-// for the given round number (used to detect "everyone finished round 20").
 export async function markPart1Done(roomId: string, playerRowId: string) {
   const supabase = createClient();
   const { error } = await supabase
@@ -72,19 +70,33 @@ export async function markPart1Done(roomId: string, playerRowId: string) {
   if (error) throw new Error(error.message);
 }
 
-// Returns true if every player currently in the room has explicitly hit
-// Finish on round 20 (not just autosaved a drawing for it — autosave fires
-// on the first stroke, well before the player is actually done).
-export async function haveAllPlayersFinishedPart1(roomId: string): Promise<boolean> {
+// Returns true if every *drawing* player currently in the room has
+// explicitly hit Finish on round 20 (not just autosaved a drawing for it —
+// autosave fires on the first stroke, well before the player is actually
+// done). Excludes the word-giver, since in player-word-giver mode they never
+// draw and so can never have part1_done set.
+export async function haveAllPlayersFinishedPart1(
+  roomId: string,
+  excludePlayerId?: string | null
+): Promise<boolean> {
   const supabase = createClient();
-  const [{ count: totalCount }, { count: doneCount }] = await Promise.all([
-    supabase.from("players").select("id", { count: "exact", head: true }).eq("room_id", roomId),
-    supabase
-      .from("players")
-      .select("id", { count: "exact", head: true })
-      .eq("room_id", roomId)
-      .eq("part1_done", true),
-  ]);
+
+  let totalQuery = supabase
+    .from("players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId);
+  let doneQuery = supabase
+    .from("players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .eq("part1_done", true);
+
+  if (excludePlayerId) {
+    totalQuery = totalQuery.neq("id", excludePlayerId);
+    doneQuery = doneQuery.neq("id", excludePlayerId);
+  }
+
+  const [{ count: totalCount }, { count: doneCount }] = await Promise.all([totalQuery, doneQuery]);
   if (totalCount == null || doneCount == null) return false;
   return totalCount > 0 && doneCount >= totalCount;
 }
