@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { submitNextWord } from "@/lib/wordGiver";
+import { submitNextWord, canSubmitNextWord } from "@/lib/wordGiver";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
+import { CountdownRing } from "@/components/CountdownRing";
 import { TextInput } from "@/components/TextInput";
 import { Button } from "@/components/Button";
 import type { Room, Player, Drawing } from "@/lib/database.types";
@@ -14,6 +15,7 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
   const [nextWord, setNextWord] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [canSubmit, setCanSubmit] = useState(() => canSubmitNextWord(room.phase_deadline));
 
   const isRoundByRound = room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
   const nextRoundNumber = room.current_round + 1;
@@ -43,13 +45,25 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
     };
   }, [room.id]);
 
+  // Re-check the rate-limit deadline regularly so the button re-enables
+  // itself the instant the wait is over, without needing a page refresh.
+  useEffect(() => {
+    if (!isRoundByRound) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- immediate resync to an external deadline value, not derived render state
+    setCanSubmit(canSubmitNextWord(room.phase_deadline));
+    const interval = setInterval(() => {
+      setCanSubmit(canSubmitNextWord(room.phase_deadline));
+    }, 200);
+    return () => clearInterval(interval);
+  }, [isRoundByRound, room.phase_deadline]);
+
   async function handleSubmitWord(e: React.FormEvent) {
     e.preventDefault();
-    if (!nextWord.trim()) return;
+    if (!nextWord.trim() || !canSubmit) return;
     setError("");
     setSubmitting(true);
     try {
-      await submitNextWord(room.id, nextRoundNumber, nextWord);
+      await submitNextWord(room.id, nextRoundNumber, nextWord, room.draw_seconds);
       setNextWord("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -68,17 +82,27 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
                 all 20 words given — waiting for everyone to finish…
               </p>
             ) : (
-              <form onSubmit={handleSubmitWord} className="flex gap-2">
-                <TextInput
-                  autoFocus
-                  placeholder={`word ${nextRoundNumber} of ${TOTAL_ROUNDS}`}
-                  value={nextWord}
-                  onChange={(e) => setNextWord(e.target.value)}
-                />
-                <Button type="submit" disabled={submitting || !nextWord.trim()}>
-                  Announce
-                </Button>
-              </form>
+              <>
+                <form onSubmit={handleSubmitWord} className="flex items-center gap-2">
+                  {!canSubmit && (
+                    <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} size={24} />
+                  )}
+                  <TextInput
+                    autoFocus
+                    placeholder={`word ${nextRoundNumber} of ${TOTAL_ROUNDS}`}
+                    value={nextWord}
+                    onChange={(e) => setNextWord(e.target.value)}
+                  />
+                  <Button type="submit" disabled={submitting || !nextWord.trim() || !canSubmit}>
+                    Announce
+                  </Button>
+                </form>
+                {!canSubmit && (
+                  <p className="text-sm text-ink/40 text-center mt-2">
+                    give everyone a moment with the current word first…
+                  </p>
+                )}
+              </>
             )}
             {error && <p className="text-base text-coral-text mt-2 text-center">{error}</p>}
           </div>

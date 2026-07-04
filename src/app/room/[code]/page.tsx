@@ -229,8 +229,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                   value={room.word_giver_timing}
                   onChange={(e) => handleTimingChange(e.target.value as WordGiverTiming)}
                 >
-                  <option value="ahead_of_time">All ahead of time (2.5 min to write 20)</option>
                   <option value="round_by_round">One at a time, round by round</option>
+                  <option value="ahead_of_time">All ahead of time (2.5 min to write 20)</option>
                 </select>
               </label>
             )}

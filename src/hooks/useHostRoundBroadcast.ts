@@ -16,8 +16,13 @@ export function useHostRoundBroadcast(room: Room | null, isHost: boolean) {
       if (!room) return;
       const supabase = createClient();
 
-      // Advance the shared word-reveal schedule.
-      if (room.current_round < TOTAL_ROUNDS && room.phase_deadline) {
+      // Advance the shared word-reveal schedule. Round-by-round word-giver
+      // mode is excluded — there, phase_deadline is repurposed as the
+      // word-giver's own rate-limit timer (see submitNextWord), and
+      // current_round only advances when they explicitly submit a word.
+      const isRoundByRound =
+        room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
+      if (!isRoundByRound && room.current_round < TOTAL_ROUNDS && room.phase_deadline) {
         const deadline = new Date(room.phase_deadline).getTime();
         if (Date.now() >= deadline) {
           const nextRound = room.current_round + 1;

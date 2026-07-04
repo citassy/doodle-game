@@ -3,33 +3,41 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { resetRoomForReplay } from "@/lib/guessing";
+import { fetchRoomWords } from "@/lib/roomWords";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { Button } from "@/components/Button";
-import type { Room, Player, Drawing } from "@/lib/database.types";
+import type { Room, Player, Drawing, RoomWord } from "@/lib/database.types";
 
 export function FinalResults({ room, me, players }: { room: Room; me: Player; players: Player[] }) {
   const [drawingsByPlayer, setDrawingsByPlayer] = useState<Record<string, Drawing[]>>({});
+  const [words, setWords] = useState<RoomWord[]>([]);
   const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const supabase = createClient();
-      const { data } = await supabase.from("drawings").select().eq("room_id", room.id);
-      if (cancelled || !data) return;
-      const grouped: Record<string, Drawing[]> = {};
-      for (const d of data as Drawing[]) {
-        (grouped[d.player_id] ??= []).push(d);
+      const [{ data }, roomWords] = await Promise.all([
+        supabase.from("drawings").select().eq("room_id", room.id),
+        fetchRoomWords(room.id),
+      ]);
+      if (cancelled) return;
+      if (data) {
+        const grouped: Record<string, Drawing[]> = {};
+        for (const d of data as Drawing[]) {
+          (grouped[d.player_id] ??= []).push(d);
+        }
+        setDrawingsByPlayer(grouped);
       }
-      setDrawingsByPlayer(grouped);
+      setWords(roomWords);
     })();
     return () => {
       cancelled = true;
     };
   }, [room.id]);
 
-    const scorers =
+  const scorers =
     room.word_giver_mode === "player"
       ? players.filter((p) => p.id !== room.word_giver_player_id)
       : players;
@@ -73,13 +81,20 @@ export function FinalResults({ room, me, players }: { room: Room; me: Player; pl
               <div className="grid grid-cols-5 gap-2">
                 {Array.from({ length: TOTAL_ROUNDS }, (_, i) => i + 1).map((round) => {
                   const drawing = drawings.find((d) => d.round_number === round);
+                  const word = words.find((w) => w.round_number === round)?.word_text;
                   return (
-                    <DrawingCanvas
-                      key={round}
-                      initialStrokes={drawing?.strokes ?? []}
-                      onChange={() => {}}
-                      disabled
-                    />
+                    <div key={round}>
+                      <DrawingCanvas
+                        initialStrokes={drawing?.strokes ?? []}
+                        onChange={() => {}}
+                        disabled
+                      />
+                      {word && (
+                        <p className="text-xs text-ink/50 text-center mt-1 truncate" title={word}>
+                          {word}
+                        </p>
+                      )}
+                    </div>
                   );
                 })}
               </div>
