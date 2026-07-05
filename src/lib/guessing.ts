@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { COUNTDOWN_SECONDS, TOTAL_ROUNDS } from "@/lib/constants";
+import { isGuessCorrect } from "@/lib/fuzzyMatch";
 
 function pickRandomUnrevealed(revealed: number[]): number {
   const remaining = Array.from({ length: TOTAL_ROUNDS }, (_, i) => i + 1).filter(
@@ -77,8 +78,7 @@ export async function submitGuess(
   correctWord: string
 ) {
   const supabase = createClient();
-  const isCorrect = guessText.trim().toLowerCase() === correctWord.trim().toLowerCase();
-
+  const isCorrect = isGuessCorrect(guessText, correctWord);
   const { error } = await supabase.from("guesses").upsert(
     {
       room_id: roomId,

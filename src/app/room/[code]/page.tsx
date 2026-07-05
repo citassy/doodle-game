@@ -239,14 +239,15 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               <Toggle
                 checked={room.auto_advance_canvas}
                 onChange={handleAutoAdvanceChange}
-                label="canvas changes automatically"
+                label="change canvas automatically"
+                info="On: the canvas switches to the next word by itself when time is up — no clicking needed. Off: you decide when to move on, so you can keep drawing even after the next word's been announced."
               />
-              
               <Toggle
                 checked={room.mix_drawings}
                 onChange={handleMixDrawingsChange}
-                label="mix up whose drawing gets guessed"
+                label="mix drawings when guessing"
                 disabled={!eligibleForMixing}
+                info="When on, during the guessing round everyone sees someone else's drawing instead of their own — you still guess one drawing per round, just not one of yours."
               />
               {!eligibleForMixing && (
                 <p className="text-xs text-ink/40 -mt-1 mb-1">

@@ -6,8 +6,10 @@ import { getMyDrawingCount, getDrawing, saveDrawing, markPart1Done } from "@/lib
 import { markReady, isRevealConditionMetSync, tryAdvanceRound } from "@/lib/roundReveal";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
+import type { DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
 import { Button } from "@/components/Button";
+import { VolumeIcon } from "@/components/VolumeIcon";
 import type { Room, Player, RoomWord, StrokePoint } from "@/lib/database.types";
 
 export function DrawingRound({
@@ -29,6 +31,7 @@ export function DrawingRound({
   // back around. Cleared whenever personalRound changes.
   const [optimisticReadyRound, setOptimisticReadyRound] = useState<number | null>(null);
   const savingRef = useRef(false);
+  const canvasHandleRef = useRef<DrawingCanvasHandle>(null);
 
   // `me.part1_done` is the single source of truth for "am I done" — it only
   // becomes true when the player explicitly clicks Finish (see below), never
@@ -63,6 +66,10 @@ export function DrawingRound({
   // final for that round.
   useEffect(() => {
     if (!room.auto_advance_canvas || iAmDone || room.current_round === 0) return;
+    // Flush any in-progress stroke before the canvas unmounts — otherwise a
+    // stroke that's mid-gesture right as the word changes never gets its
+    // pointer-up event and is silently lost.
+    canvasHandleRef.current?.finishStroke();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local round to an external prop (the broadcast round), not derived render state
     setPersonalRound(Math.min(room.current_round, TOTAL_ROUNDS));
   }, [room.auto_advance_canvas, room.current_round, iAmDone]);
@@ -115,7 +122,6 @@ export function DrawingRound({
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(broadcastWord));
   }, [broadcastWord, room.current_round, muted]);
 
- 
   const canAdvance = personalRound != null && personalRound < room.current_round;
   const isLastRound = personalRound === TOTAL_ROUNDS;
   // `me` already reflects the latest players row via the realtime
@@ -145,6 +151,7 @@ export function DrawingRound({
   // forward automatically — no second click required.
   useEffect(() => {
     if (markedReady && canAdvance && personalRound != null) {
+      canvasHandleRef.current?.finishStroke();
       // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local round forward once an external condition (word now available) becomes true, same pattern as the auto_advance_canvas sync above
       setPersonalRound(personalRound + 1);
     }
@@ -175,6 +182,7 @@ export function DrawingRound({
     }
     if (room.auto_advance_canvas) return; // canvas advances on its own
     if (canAdvance) {
+      canvasHandleRef.current?.finishStroke();
       setPersonalRound(personalRound + 1);
       return;
     }
@@ -260,9 +268,9 @@ export function DrawingRound({
           <button
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? "Unmute word read-aloud" : "Mute word read-aloud"}
-            className="text-xl text-ink/60 hover:text-ink px-1"
+            className="text-ink/60 hover:text-ink px-1"
           >
-            {muted ? "🔇" : "🔊"}
+            <VolumeIcon muted={muted} />
           </button>
         </div>
 
@@ -276,6 +284,7 @@ export function DrawingRound({
             </span>
           )}
           <DrawingCanvas
+            ref={canvasHandleRef}
             key={personalRound}
             initialStrokes={strokes}
             onChange={handleStrokesChange}
@@ -300,7 +309,6 @@ export function DrawingRound({
             )}
           </>
         )}
-
       </div>
     </main>
   );

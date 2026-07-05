@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { StrokePoint } from "@/lib/database.types";
 
 const LOGICAL_SIZE = 500;
@@ -12,7 +12,20 @@ interface Props {
   disabled?: boolean;
 }
 
-export function DrawingCanvas({ initialStrokes = [], onChange, disabled = false }: Props) {
+export interface DrawingCanvasHandle {
+  // Finalizes whatever stroke is currently in progress (if any), triggering
+  // onChange immediately. Call this right before anything that's about to
+  // unmount/remount the canvas (e.g. the round advancing), so a stroke
+  // that's mid-gesture at that exact moment still gets saved instead of
+  // being silently lost when the component disappears out from under the
+  // pointer-up event that would normally have saved it.
+  finishStroke: () => void;
+}
+
+export const DrawingCanvas = forwardRef<DrawingCanvasHandle, Props>(function DrawingCanvas(
+  { initialStrokes = [], onChange, disabled = false },
+  ref
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokesRef = useRef<StrokePoint[][]>(initialStrokes);
   const [, forceRender] = useState(0);
@@ -78,6 +91,10 @@ export function DrawingCanvas({ initialStrokes = [], onChange, disabled = false 
     forceRender((n) => n + 1);
   }
 
+  useImperativeHandle(ref, () => ({
+    finishStroke: endStroke,
+  }));
+
   return (
     <div
       className="relative border-2 border-ink rounded-lg bg-paper overflow-hidden select-none"
@@ -104,4 +121,4 @@ export function DrawingCanvas({ initialStrokes = [], onChange, disabled = false 
       />
     </div>
   );
-}
+});
