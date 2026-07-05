@@ -8,7 +8,7 @@ const SLIDES = [
     image: "/tutorial/part1.png",
     title: "round 1: doodle fast",
     description:
-      "watch the timer up top. in automatic mode the canvas moves on by itself when time's up — in manual mode, hit \"Next\" (or space) whenever you're ready.",
+      "Each round you will get a word. Draw it quickly, because the next word will come soon! Note: in manual mode, you have to click the Next button to start drawing the next word. Don't fall behind!"
   },
   {
     image: "/tutorial/part2.png",
