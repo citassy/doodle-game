@@ -11,10 +11,15 @@ interface Props {
 export function CountdownRing({ deadline, durationSeconds, size = 28 }: Props) {
   const [remaining, setRemaining] = useState(1);
 
+  
   useEffect(() => {
-    if (!deadline) return;
+    if (!deadline) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing to an external prop (deadline going null means "timer off"), not derived render state
+      setRemaining(0);
+      return;
+    }
     const deadlineMs = new Date(deadline).getTime();
-
+    
     function tick() {
       const msLeft = deadlineMs - Date.now();
       setRemaining(Math.max(0, Math.min(1, msLeft / (durationSeconds * 1000))));

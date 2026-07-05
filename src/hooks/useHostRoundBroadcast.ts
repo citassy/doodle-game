@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { haveAllPlayersFinishedPart1 } from "@/lib/drawings";
+import { tryAdvanceRound } from "@/lib/roundReveal";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import type { Room } from "@/lib/database.types";
 
@@ -16,30 +17,19 @@ export function useHostRoundBroadcast(room: Room | null, isHost: boolean) {
       if (!room) return;
       const supabase = createClient();
 
-      // Advance the shared word-reveal schedule. Round-by-round word-giver
-      // mode is excluded — there, phase_deadline is repurposed as the
-      // word-giver's own rate-limit timer (see submitNextWord), and
-      // current_round only advances when they explicitly submit a word.
-      const isRoundByRound =
-        room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
-      if (!isRoundByRound && room.current_round < TOTAL_ROUNDS && room.phase_deadline) {
-        const deadline = new Date(room.phase_deadline).getTime();
-        if (Date.now() >= deadline) {
-          const nextRound = room.current_round + 1;
-          const nextDeadline = new Date(Date.now() + room.draw_seconds * 1000).toISOString();
-          await supabase
-            .from("rooms")
-            .update({ current_round: nextRound, phase_deadline: nextDeadline })
-            .eq("id", room.id);
-          return;
-        }
+      // Fallback for the "timer just ran out, nobody clicked anything"
+      // case — action-triggered reveals (marking ready, submitting a word)
+      // already try this themselves the instant they happen, so this poll
+      // only ever matters when nobody's doing anything and the clock alone
+      // needs to trigger the reveal.
+      if (room.current_round < TOTAL_ROUNDS) {
+        const advanced = await tryAdvanceRound(room);
+        if (advanced) return;
       }
 
-      // Once every word has been revealed (either the fixed schedule ran
-      // its course, or the word-giver has manually given all 20 in
-      // round-by-round mode), start polling for "has everyone explicitly
-      // clicked Finish on round 20 yet" to move to the transition screen.
-      // Guard against overlapping checks with a ref flag.
+      // Once every word has been revealed, start polling for "has everyone
+      // explicitly clicked Finish on round 20 yet" to move to the
+      // transition screen. Guard against overlapping checks with a ref flag.
       if (room.current_round >= TOTAL_ROUNDS && !checkingFinish.current) {
         checkingFinish.current = true;
         try {

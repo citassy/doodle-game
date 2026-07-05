@@ -3,18 +3,31 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchRoomWords } from "@/lib/roomWords";
 import { getMyDrawingCount, getDrawing, saveDrawing, markPart1Done } from "@/lib/drawings";
+import { markReady, isRevealConditionMetSync, tryAdvanceRound } from "@/lib/roundReveal";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
 import { Button } from "@/components/Button";
 import type { Room, Player, RoomWord, StrokePoint } from "@/lib/database.types";
 
-export function DrawingRound({ room, me }: { room: Room; me: Player }) {
+export function DrawingRound({
+  room,
+  me,
+  players,
+}: {
+  room: Room;
+  me: Player;
+  players: Player[];
+}) {
   const [words, setWords] = useState<RoomWord[] | null>(null);
   const [personalRound, setPersonalRound] = useState<number | null>(null);
   const [strokes, setStrokes] = useState<StrokePoint[][]>([]);
   const [muted, setMuted] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  // Optimistic "I just clicked ready" flag, for instant feedback before the
+  // realtime update carrying our own players.ready_for_round write comes
+  // back around. Cleared whenever personalRound changes.
+  const [optimisticReadyRound, setOptimisticReadyRound] = useState<number | null>(null);
   const savingRef = useRef(false);
 
   // `me.part1_done` is the single source of truth for "am I done" — it only
@@ -55,9 +68,12 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
   }, [room.auto_advance_canvas, room.current_round, iAmDone]);
 
   // Hydrate the canvas whenever the personal round changes (covers both
-  // normal advancing and the refresh-resume case above).
+  // normal advancing and the refresh-resume case above), and reset the
+  // optimistic-ready flag for the new round.
   useEffect(() => {
     if (personalRound == null || iAmDone) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting local optimistic flag when the round itself changes, not derived render state
+    setOptimisticReadyRound(null);
     let cancelled = false;
     (async () => {
       const existing = await getDrawing(room.id, me.id, personalRound);
@@ -99,6 +115,41 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(broadcastWord));
   }, [broadcastWord, room.current_round, muted]);
 
+ 
+  const canAdvance = personalRound != null && personalRound < room.current_round;
+  const isLastRound = personalRound === TOTAL_ROUNDS;
+  // `me` already reflects the latest players row via the realtime
+  // subscription one level up, so this needs no extra fetch or poll.
+  const markedReady =
+    personalRound != null &&
+    (me.ready_for_round === personalRound || optimisticReadyRound === personalRound);
+  // Predict whether the reveal will resolve near-instantly, by checking the
+  // condition as if our own optimistic ready flag already counted (which,
+  // once the write lands, it will). Solo play always predicts true here,
+  // since "1 of 1 ready" is met the moment we click — this is what stops
+  // the waiting text from flashing on and off for a case that was never
+  // really a wait.
+  const optimisticPlayers =
+    optimisticReadyRound != null
+      ? players.map((p) => (p.id === me.id ? { ...p, ready_for_round: optimisticReadyRound } : p))
+      : players;
+  const predictedInstant = isRevealConditionMetSync(room, optimisticPlayers);
+  const isWaiting = markedReady && !canAdvance && !isLastRound && !predictedInstant;
+  const isSettling = markedReady && !canAdvance && !isLastRound && predictedInstant;
+  // In the waiting state, personalRound always equals room.current_round
+  // (you can only be "waiting to move past" your own current round), so
+  // this reads directly off the already-realtime players array — no query.
+  const allOthersReady = isRevealConditionMetSync(room, players);
+
+  // The moment the word we're waiting on actually becomes available, move
+  // forward automatically — no second click required.
+  useEffect(() => {
+    if (markedReady && canAdvance && personalRound != null) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local round forward once an external condition (word now available) becomes true, same pattern as the auto_advance_canvas sync above
+      setPersonalRound(personalRound + 1);
+    }
+  }, [markedReady, canAdvance, personalRound]);
+
   const handleStrokesChange = useCallback(
     (next: StrokePoint[][]) => {
       setStrokes(next);
@@ -110,9 +161,6 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     },
     [room.id, me.id, personalRound]
   );
-
-  const canAdvance = personalRound != null && personalRound < room.current_round;
-  const isLastRound = personalRound === TOTAL_ROUNDS;
 
   const advance = useCallback(async () => {
     if (personalRound == null || finishing) return;
@@ -126,9 +174,22 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
       return;
     }
     if (room.auto_advance_canvas) return; // canvas advances on its own
-    if (!canAdvance) return;
-    setPersonalRound(personalRound + 1);
-  }, [personalRound, isLastRound, canAdvance, finishing, room.id, me.id, room.auto_advance_canvas]);
+    if (canAdvance) {
+      setPersonalRound(personalRound + 1);
+      return;
+    }
+    if (!markedReady) {
+      setOptimisticReadyRound(personalRound); // instant feedback
+      try {
+        await markReady(me.id, personalRound);
+        // I might've just been the last drawer needed — check immediately
+        // rather than waiting for the host's next background poll.
+        await tryAdvanceRound(room);
+      } catch {
+        setOptimisticReadyRound(null);
+      }
+    }
+  }, [personalRound, isLastRound, canAdvance, finishing, room, me.id, markedReady]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -178,26 +239,19 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
     <main className="flex-1 flex flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 mb-3">
-          {isRoundByRound ? (
-            <span
-              className="w-7 h-7 rounded-full border-2 border-border-muted flex items-center justify-center text-xs"
-              aria-hidden="true"
-            >
-              ✎
-            </span>
-          ) : room.current_round < TOTAL_ROUNDS ? (
-            <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} />
-          ) : (
+          {room.current_round >= TOTAL_ROUNDS ? (
             <span
               className="w-7 h-7 rounded-full border-2 border-coral flex items-center justify-center text-xs"
               aria-hidden="true"
             >
               ✓
             </span>
+          ) : (
+            <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} />
           )}
           <div className="flex-1">
             <span className="text-sm text-ink/50">
-              {!isRoundByRound && room.current_round >= TOTAL_ROUNDS
+              {room.current_round >= TOTAL_ROUNDS
                 ? "last word — finish whenever you're ready"
                 : `word ${room.current_round} of ${TOTAL_ROUNDS}`}
             </span>
@@ -229,17 +283,24 @@ export function DrawingRound({ room, me }: { room: Room; me: Player }) {
         </div>
 
         {showAdvanceButton && (
-          <Button
-            onClick={advance}
-            disabled={(!isLastRound && !canAdvance) || finishing}
-            className="w-full mt-3"
-          >
-            {isLastRound ? (finishing ? "Finishing…" : "Finish") : "Next → (or hit space)"}
-          </Button>
+          <>
+            {isWaiting ? (
+              <p className="font-hand text-lg text-ink/50 text-center mt-3 py-2.5">
+                {allOthersReady ? "waiting for the next word…" : "waiting for other drawers to finish…"}
+              </p>
+            ) : isSettling ? null : (
+              <>
+                <Button onClick={advance} disabled={finishing} className="w-full mt-3">
+                  {isLastRound ? (finishing ? "Finishing…" : "Finish") : "Next →"}
+                </Button>
+                {!isLastRound && (
+                  <p className="text-sm text-ink/40 text-center mt-2">or press space</p>
+                )}
+              </>
+            )}
+          </>
         )}
-        {showAdvanceButton && !isLastRound && !canAdvance && (
-          <p className="text-sm text-ink/40 text-center mt-2">waiting for the next word…</p>
-        )}
+
       </div>
     </main>
   );

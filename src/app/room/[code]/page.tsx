@@ -68,7 +68,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     if (isWordGiver) {
       return <WatchDrawingsLive room={room} players={players.filter((p) => p.id !== me.id)} />;
     }
-    return <DrawingRound room={room} me={me} />;
+    return <DrawingRound room={room} me={me} players={players} />;
   }
 
   if (room.status === "transition") {

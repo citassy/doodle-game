@@ -100,3 +100,18 @@ export async function haveAllPlayersFinishedPart1(
   if (totalCount == null || doneCount == null) return false;
   return totalCount > 0 && doneCount >= totalCount;
 }
+
+export async function getActiveDrawerCount(
+  roomId: string,
+  excludePlayerId?: string | null
+): Promise<number> {
+  const supabase = createClient();
+  let query = supabase
+    .from("players")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId);
+  if (excludePlayerId) query = query.neq("id", excludePlayerId);
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}

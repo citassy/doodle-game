@@ -44,6 +44,8 @@ export interface Player {
   connected: boolean;
   part1_done: boolean;
   joined_at: string;
+  ready_for_round: number | null;
+
 }
 
 export interface Word {

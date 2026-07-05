@@ -150,12 +150,21 @@ export async function haveAllPlayersGuessed(
 // Wipes this room's round data and sends everyone back to the lobby.
 export async function resetRoomForReplay(roomId: string) {
   const supabase = createClient();
-  await Promise.all([
+  const results = await Promise.all([
     supabase.from("drawings").delete().eq("room_id", roomId),
     supabase.from("guesses").delete().eq("room_id", roomId),
     supabase.from("room_words").delete().eq("room_id", roomId),
   ]);
-  await supabase.from("players").update({ score: 0, part1_done: false }).eq("room_id", roomId);
+  for (const result of results) {
+    if (result.error) throw new Error(result.error.message);
+  }
+
+  const { error: playersError } = await supabase
+    .from("players")
+    .update({ score: 0, part1_done: false, ready_for_round: null })
+    .eq("room_id", roomId);
+  if (playersError) throw new Error(playersError.message);
+
   const { error } = await supabase
     .from("rooms")
     .update({

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { submitNextWord, canSubmitNextWord } from "@/lib/wordGiver";
+import { submitNextWord } from "@/lib/wordGiver";
+import { getWordForRound, isRevealConditionMetSync, tryAdvanceRound } from "@/lib/roundReveal";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
@@ -15,11 +16,16 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
   const [nextWord, setNextWord] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [canSubmit, setCanSubmit] = useState(() => canSubmitNextWord(room.phase_deadline));
+  const [queuedWord, setQueuedWord] = useState<string | null>(null);
 
   const isRoundByRound = room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
   const nextRoundNumber = room.current_round + 1;
   const allWordsGiven = isRoundByRound && room.current_round >= TOTAL_ROUNDS;
+  // `players` here is already the drawer list (word-giver excluded by the
+  // caller) and is already realtime-subscribed one level up, so this is
+  // free — no query, no poll.
+  const readyCount = players.filter((p) => p.ready_for_round === room.current_round).length;
+  const revealConditionMet = isRevealConditionMetSync(room, players);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,26 +51,34 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
     };
   }, [room.id]);
 
-  // Re-check the rate-limit deadline regularly so the button re-enables
-  // itself the instant the wait is over, without needing a page refresh.
+  // Whenever the broadcast round changes (meaning whatever was queued just
+  // got revealed), check whether the new "next" slot already has a word —
+  // covers refresh-while-queued, and clears the queued state once revealed.
   useEffect(() => {
     if (!isRoundByRound) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- immediate resync to an external deadline value, not derived render state
-    setCanSubmit(canSubmitNextWord(room.phase_deadline));
-    const interval = setInterval(() => {
-      setCanSubmit(canSubmitNextWord(room.phase_deadline));
-    }, 200);
-    return () => clearInterval(interval);
-  }, [isRoundByRound, room.phase_deadline]);
+    let cancelled = false;
+    (async () => {
+      const existing = await getWordForRound(room.id, nextRoundNumber);
+      if (!cancelled) setQueuedWord(existing);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRoundByRound, room.id, nextRoundNumber]);
 
   async function handleSubmitWord(e: React.FormEvent) {
     e.preventDefault();
-    if (!nextWord.trim() || !canSubmit) return;
+    if (!nextWord.trim() || queuedWord) return;
     setError("");
     setSubmitting(true);
     try {
-      await submitNextWord(room.id, nextRoundNumber, nextWord, room.draw_seconds);
+      await submitNextWord(room.id, nextRoundNumber, nextWord);
+      setQueuedWord(nextWord.trim());
       setNextWord("");
+      // The reveal condition might already be met (e.g. everyone was ready
+      // and just waiting on this) — check right away instead of waiting for
+      // the host's next background poll.
+      await tryAdvanceRound(room);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -81,27 +95,40 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
               <p className="text-base text-ink/40 text-center">
                 all 20 words given — waiting for everyone to finish…
               </p>
+            ) : queuedWord ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <TextInput value={queuedWord} disabled className="opacity-60" />
+                  <Button disabled className="opacity-60">
+                    Announce
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} size={24} />
+                  <p className="text-sm text-ink/40">waiting for the next round…</p>
+                </div>
+              </>
             ) : (
               <>
                 <form onSubmit={handleSubmitWord} className="flex items-center gap-2">
-                  {!canSubmit && (
-                    <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} size={24} />
-                  )}
                   <TextInput
                     autoFocus
                     placeholder={`word ${nextRoundNumber} of ${TOTAL_ROUNDS}`}
                     value={nextWord}
                     onChange={(e) => setNextWord(e.target.value)}
                   />
-                  <Button type="submit" disabled={submitting || !nextWord.trim() || !canSubmit}>
+                  <Button type="submit" disabled={submitting || !nextWord.trim()}>
                     Announce
                   </Button>
                 </form>
-                {!canSubmit && (
-                  <p className="text-sm text-ink/40 text-center mt-2">
-                    give everyone a moment with the current word first…
+                <div className="flex items-center gap-2 mt-2">
+                  <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} size={24} />
+                  <p className="text-sm text-ink/40">
+                    {revealConditionMet
+                      ? "everyone's ready for the next word!"
+                      : `${readyCount}/${players.length} drawers ready`}
                   </p>
-                )}
+                </div>
               </>
             )}
             {error && <p className="text-base text-coral-text mt-2 text-center">{error}</p>}

@@ -77,20 +77,16 @@ export async function finalizePrepWithFallback(roomId: string, drawSeconds: numb
   if (error) throw new Error(error.message);
 }
 
-// Called by the word-giver each time they submit the next word. Saves it and
-// immediately announces it (advances current_round) — no fixed reveal
-// schedule, but phase_deadline is set to `drawSeconds` from now to enforce a
-// minimum wait before they can submit the *next* word (see canSubmitNextWord
-// below), so drawers always get at least that long per word.
-export async function submitNextWord(
-  roomId: string,
-  roundNumber: number,
-  wordText: string,
-  drawSeconds: number
-) {
+// Called by the word-giver each time they submit the next word. Just saves
+// it — it does NOT touch current_round or announce anything. Revealing it
+// to drawers is handled entirely by tryAdvanceRound (see roundReveal.ts),
+// the same reveal engine computer/ahead-of-time modes use, so the word may
+// sit queued for a moment if the reveal condition (timer / everyone ready)
+// isn't met yet.
+export async function submitNextWord(roomId: string, roundNumber: number, wordText: string) {
   if (!wordText.trim()) throw new Error("Word can't be empty.");
   const supabase = createClient();
-  const { error: wordError } = await supabase.from("room_words").upsert(
+  const { error } = await supabase.from("room_words").upsert(
     {
       room_id: roomId,
       round_number: roundNumber,
@@ -98,17 +94,5 @@ export async function submitNextWord(
     },
     { onConflict: "room_id,round_number" }
   );
-  if (wordError) throw new Error(wordError.message);
-
-  const deadline = new Date(Date.now() + drawSeconds * 1000).toISOString();
-  const { error } = await supabase
-    .from("rooms")
-    .update({ current_round: roundNumber, phase_deadline: deadline })
-    .eq("id", roomId);
   if (error) throw new Error(error.message);
-}
-
-export function canSubmitNextWord(phaseDeadline: string | null): boolean {
-  if (!phaseDeadline) return true;
-  return Date.now() >= new Date(phaseDeadline).getTime();
 }
