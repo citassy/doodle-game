@@ -129,7 +129,7 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
                   {earlyAdvancePossible && (
                     <p className="text-sm text-ink/40">
                       {revealConditionMet
-                        ? "everyone's ready for the next word!"
+                        ? "Ready for the next word!"
                         : `${readyCount}/${players.length} drawers ready`}
                     </p>
                   )}
