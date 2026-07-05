@@ -27,6 +27,7 @@ import { WaitingForWordsScreen } from "@/components/WaitingForWordsScreen";
 import { WatchDrawingsLive } from "@/components/WatchDrawingsLive";
 import { WordGiverFirstPickScreen } from "@/components/WordGiverFirstPickScreen";
 import { WordGiverGuessView } from "@/components/WordGiverGuessView";
+import { TutorialCarousel } from "@/components/TutorialCarousel";
 import { useHostGuessingController } from "@/hooks/useHostGuessingController";
 import { useHostPrepController } from "@/hooks/useHostPrepController";
 import { useHostRoundBroadcast } from "@/hooks/useHostRoundBroadcast";
@@ -169,8 +170,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     room.word_giver_mode === "computer" ? players.length >= 2 : players.length >= 3;
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8 py-8">
-      <div className="w-full max-w-sm bg-paper border-2 border-ink rounded-xl p-4">
+    <main className="flex-1 flex items-center justify-center px-6 py-8">
+      <div className="w-full max-w-6xl grid md:grid-cols-[1fr_1.4fr] gap-6">
+      <div className="w-full h-full bg-paper border-2 border-ink rounded-xl p-4 flex flex-col">
         <div className="flex items-center gap-2 mb-3">
           <span className="font-hand font-bold text-xl bg-coral text-coral-text rounded-md px-2 -rotate-1 inline-block">
             {room.code}
@@ -197,7 +199,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         </div>
 
         {isHost ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 flex-1">
             <label className="flex flex-col gap-1">
               <span className="text-sm text-ink/50">word giver</span>
               <select
@@ -239,13 +241,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               <Toggle
                 checked={room.auto_advance_canvas}
                 onChange={handleAutoAdvanceChange}
-                label="change canvas automatically"
-                info="On: the canvas switches to the next word by itself when time is up — no clicking needed. Off: you decide when to move on, so you can keep drawing even after the next word's been announced."
+                label="canvas changes automatically"
+                info="When on, everyone's canvas switches to the next word by itself once it's time — no clicking needed. When off, you decide when to move on, so you can keep drawing even after the next word's been announced."
               />
               <Toggle
                 checked={room.mix_drawings}
                 onChange={handleMixDrawingsChange}
-                label="mix drawings when guessing"
+                label="mix up whose drawing gets guessed"
                 disabled={!eligibleForMixing}
                 info="When on, during the guessing round everyone sees someone else's drawing instead of their own — you still guess one drawing per round, just not one of yours."
               />
@@ -254,7 +256,6 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
                   needs at least {room.word_giver_mode === "computer" ? "2 players" : "3 players (1 word giver + 2 drawers)"}
                 </p>
               )}
-              
               <SecondsStepper
                 label="time to draw each word"
                 value={room.draw_seconds}
@@ -267,15 +268,21 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               />
             </div>
 
-            {error && <p className="text-base text-coral-text">{error}</p>}
-
-            <Button onClick={handleStart} disabled={starting}>
-              {starting ? "Starting…" : "Start"}
-            </Button>
+            <div className="mt-auto flex flex-col gap-3 pt-3">
+              {error && <p className="text-base text-coral-text">{error}</p>}
+              <Button onClick={handleStart} disabled={starting}>
+                {starting ? "Starting…" : "Start"}
+              </Button>
+            </div>
           </div>
         ) : (
-          <p className="text-base text-ink/50 text-center pt-1">waiting for the host to start…</p>
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-base text-ink/50 text-center">waiting for the host to start…</p>
+          </div>
         )}
+      </div>
+
+      <TutorialCarousel />
       </div>
     </main>
   );

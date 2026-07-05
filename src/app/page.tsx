@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { TextInput } from "@/components/TextInput";
+import { Modal } from "@/components/Modal";
+import { TutorialCarousel } from "@/components/TutorialCarousel";
 import { createRoom, joinRoom, RoomError } from "@/lib/room";
 import { getSavedName, saveName } from "@/lib/localPlayer";
 
@@ -13,6 +15,7 @@ export default function WelcomePage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState<"join" | "create" | null>(null);
   const [error, setError] = useState("");
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     const saved = getSavedName();
@@ -55,7 +58,7 @@ export default function WelcomePage() {
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-6">
-      <h1 className="font-hand text-5xl font-bold mb-8 -rotate-1">Draw n' Guess</h1>
+      <h1 className="font-hand text-5xl font-bold mb-8 -rotate-1">doodle</h1>
 
       <div className="w-full max-w-xs flex flex-col gap-3">
         <TextInput
@@ -80,7 +83,16 @@ export default function WelcomePage() {
         <Button variant="secondary" onClick={handleCreate} disabled={loading !== null}>
           {loading === "create" ? "Creating…" : "Create room"}
         </Button>
+        <Button variant="secondary" onClick={() => setShowTutorial(true)}>
+          How to play?
+        </Button>
       </div>
+
+      {showTutorial && (
+        <Modal onClose={() => setShowTutorial(false)}>
+          <TutorialCarousel />
+        </Modal>
+      )}
     </main>
   );
 }
