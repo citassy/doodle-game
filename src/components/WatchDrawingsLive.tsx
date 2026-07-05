@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { submitNextWord } from "@/lib/wordGiver";
-import { getWordForRound, isRevealConditionMetSync, tryAdvanceRound } from "@/lib/roundReveal";
+import { getWordForRound, isRevealConditionMetSync, tryAdvanceRound, allDrawersManual } from "@/lib/roundReveal";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import { CountdownRing } from "@/components/CountdownRing";
@@ -23,7 +23,10 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
   const allWordsGiven = isRoundByRound && room.current_round >= TOTAL_ROUNDS;
   // `players` here is already the drawer list (word-giver excluded by the
   // caller) and is already realtime-subscribed one level up, so this is
-  // free — no query, no poll.
+  // free — no query, no poll. If anyone's in auto-advance mode, early
+  // reveal is impossible regardless of readiness, so there's nothing
+  // meaningful to show progress toward.
+  const earlyAdvancePossible = allDrawersManual(room, players);
   const readyCount = players.filter((p) => p.ready_for_round === room.current_round).length;
   const revealConditionMet = isRevealConditionMetSync(room, players);
 
@@ -123,11 +126,13 @@ export function WatchDrawingsLive({ room, players }: { room: Room; players: Play
                 </form>
                 <div className="flex items-center gap-2 mt-2">
                   <CountdownRing deadline={room.phase_deadline} durationSeconds={room.draw_seconds} size={24} />
-                  <p className="text-sm text-ink/40">
-                    {revealConditionMet
-                      ? "everyone's ready for the next word!"
-                      : `${readyCount}/${players.length} drawers ready`}
-                  </p>
+                  {earlyAdvancePossible && (
+                    <p className="text-sm text-ink/40">
+                      {revealConditionMet
+                        ? "everyone's ready for the next word!"
+                        : `${readyCount}/${players.length} drawers ready`}
+                    </p>
+                  )}
                 </div>
               </>
             )}

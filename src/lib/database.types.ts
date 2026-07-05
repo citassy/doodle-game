@@ -25,7 +25,6 @@ export interface Room {
   max_players: number;
   created_at: string;
   last_activity_at: string;
-  auto_advance_canvas: boolean;
   mix_drawings: boolean;
   drawing_source_map: Record<string, string>;
   draw_seconds: number;
@@ -45,6 +44,7 @@ export interface Player {
   part1_done: boolean;
   joined_at: string;
   ready_for_round: number | null;
+  auto_advance_canvas: boolean;
 
 }
 

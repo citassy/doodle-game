@@ -35,11 +35,23 @@ function activeDrawers(room: Room, players: Player[]): Player[] {
   return players;
 }
 
+// Early-advance-before-timer is only possible when every active drawer is
+// in manual mode. A single auto-mode drawer disables it entirely for the
+// whole room: they have no way to signal "I'm ready early" (their canvas
+// just follows the broadcast directly), so letting other players' clicks
+// force an early advance would cut their drawing time short without their
+// consent — exactly what choosing auto mode was meant to avoid. They only
+// ever move on when the timer actually runs out.
+export function allDrawersManual(room: Room, players: Player[]): boolean {
+  const drawers = activeDrawers(room, players);
+  return drawers.length > 0 && drawers.every((p) => !p.auto_advance_canvas);
+}
+
 function conditionMetFromPlayers(room: Room, players: Player[]): boolean {
   if (room.current_round === 0) return true; // first word: nothing to wait for
   if (room.phase_deadline && Date.now() >= new Date(room.phase_deadline).getTime()) return true;
+  if (!allDrawersManual(room, players)) return false; // at least one auto-mode drawer; timer only
   const drawers = activeDrawers(room, players);
-  if (drawers.length === 0) return false;
   const readyCount = drawers.filter((p) => p.ready_for_round === room.current_round).length;
   return readyCount >= drawers.length;
 }

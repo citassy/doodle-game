@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchRoomWords } from "@/lib/roomWords";
 import { getMyDrawingCount, getDrawing, saveDrawing, markPart1Done } from "@/lib/drawings";
-import { markReady, isRevealConditionMetSync, tryAdvanceRound } from "@/lib/roundReveal";
+import { markReady, isRevealConditionMetSync, allDrawersManual, tryAdvanceRound } from "@/lib/roundReveal";
 import { TOTAL_ROUNDS } from "@/lib/constants";
 import { DrawingCanvas } from "@/components/DrawingCanvas";
 import type { DrawingCanvasHandle } from "@/components/DrawingCanvas";
@@ -65,14 +65,14 @@ export function DrawingRound({
   // — no lag, no manual control. Whatever was drawn when the word changes is
   // final for that round.
   useEffect(() => {
-    if (!room.auto_advance_canvas || iAmDone || room.current_round === 0) return;
+    if (!me.auto_advance_canvas || iAmDone || room.current_round === 0) return;
     // Flush any in-progress stroke before the canvas unmounts — otherwise a
     // stroke that's mid-gesture right as the word changes never gets its
     // pointer-up event and is silently lost.
     canvasHandleRef.current?.finishStroke();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing local round to an external prop (the broadcast round), not derived render state
     setPersonalRound(Math.min(room.current_round, TOTAL_ROUNDS));
-  }, [room.auto_advance_canvas, room.current_round, iAmDone]);
+  }, [me.auto_advance_canvas, room.current_round, iAmDone]);
 
   // Hydrate the canvas whenever the personal round changes (covers both
   // normal advancing and the refresh-resume case above), and reset the
@@ -146,6 +146,10 @@ export function DrawingRound({
   // (you can only be "waiting to move past" your own current round), so
   // this reads directly off the already-realtime players array — no query.
   const allOthersReady = isRevealConditionMetSync(room, players);
+  // If anyone active is in auto-advance mode, early-advance is impossible
+  // no matter how ready everyone else is — the blocker isn't "other
+  // drawers", it's structural, so the message needs to say that instead.
+  const earlyAdvancePossible = allDrawersManual(room, players);
 
   // The moment the word we're waiting on actually becomes available, move
   // forward automatically — no second click required.
@@ -180,7 +184,7 @@ export function DrawingRound({
       }
       return;
     }
-    if (room.auto_advance_canvas) return; // canvas advances on its own
+    if (me.auto_advance_canvas) return; // canvas advances on its own
     if (canAdvance) {
       canvasHandleRef.current?.finishStroke();
       setPersonalRound(personalRound + 1);
@@ -197,7 +201,7 @@ export function DrawingRound({
         setOptimisticReadyRound(null);
       }
     }
-  }, [personalRound, isLastRound, canAdvance, finishing, room, me.id, markedReady]);
+  }, [personalRound, isLastRound, canAdvance, finishing, room, me.id, me.auto_advance_canvas, markedReady]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -213,7 +217,7 @@ export function DrawingRound({
   const isRoundByRound = room.word_giver_mode === "player" && room.word_giver_timing === "round_by_round";
   // With auto-advance on, there's never anything to click except the final
   // Finish once the last round arrives — no Next button in between.
-  const showAdvanceButton = isLastRound || !room.auto_advance_canvas;
+  const showAdvanceButton = isLastRound || !me.auto_advance_canvas;
 
   if (iAmDone) {
     return (
@@ -278,7 +282,7 @@ export function DrawingRound({
           <span className="absolute top-2 left-2.5 z-10 font-hand text-lg text-ink/40">
             {personalRound}
           </span>
-          {canAdvance && !room.auto_advance_canvas && (
+          {canAdvance && !me.auto_advance_canvas && (
             <span className="absolute top-2 right-2.5 z-10 text-xs text-coral-text bg-coral/40 rounded-full px-2 py-0.5">
               {room.current_round - personalRound} word{room.current_round - personalRound > 1 ? "s" : ""} ahead
             </span>
@@ -295,7 +299,9 @@ export function DrawingRound({
           <>
             {isWaiting ? (
               <p className="font-hand text-lg text-ink/50 text-center mt-3 py-2.5">
-                {allOthersReady ? "waiting for the next word…" : "waiting for other drawers to finish…"}
+                {!earlyAdvancePossible || allOthersReady
+                  ? "waiting for the next word…"
+                  : "waiting for other drawers to finish…"}
               </p>
             ) : isSettling ? null : (
               <>

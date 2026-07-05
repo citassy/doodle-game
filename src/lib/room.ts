@@ -26,11 +26,6 @@ export async function setWordGiverTiming(roomId: string, timing: WordGiverTiming
   if (error) throw new RoomError(error.message);
 }
 
-export async function setAutoAdvanceCanvas(roomId: string, value: boolean) {
-  const supabase = createClient();
-  const { error } = await supabase.from("rooms").update({ auto_advance_canvas: value }).eq("id", roomId);
-  if (error) throw new RoomError(error.message);
-}
 
 export async function setMixDrawings(roomId: string, value: boolean) {
   const supabase = createClient();

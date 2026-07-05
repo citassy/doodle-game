@@ -6,13 +6,13 @@ import { getLocalPlayerId } from "@/lib/localPlayer";
 import {
   setWordGiverMode,
   setWordGiverTiming,
-  setAutoAdvanceCanvas,
   setMixDrawings,
   setDrawSeconds,
   setGuessSeconds,
   startGame,
   RoomError,
 } from "@/lib/room";
+import { setMyAutoAdvanceCanvas } from "@/lib/playerPrefs";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
@@ -117,12 +117,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
-  async function handleAutoAdvanceChange(value: boolean) {
-    if (!room) return;
+  async function handleMyAutoAdvanceChange(value: boolean) {
+    if (!me) return;
     try {
-      await setAutoAdvanceCanvas(room.id, value);
+      await setMyAutoAdvanceCanvas(me.id, value);
     } catch (err) {
-      setError(err instanceof RoomError ? err.message : "Something went wrong.");
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     }
   }
 
@@ -198,8 +198,33 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           )}
         </div>
 
-        {isHost ? (
+        {/* Personal preference — every player sets this for themselves,
+            regardless of who's host. Disabled for whoever's the word
+            giver, since they never draw. */}
+        {(() => {
+          const privateSettings = me && (
+            <div>
+              <p className="text-xs uppercase tracking-wide text-ink/40 font-semibold mb-1.5">
+                private settings
+              </p>
+              <Toggle
+                checked={me.auto_advance_canvas}
+                onChange={handleMyAutoAdvanceChange}
+                label="canvas changes automatically"
+                disabled={isWordGiver}
+                info="This is just for you — when on, your canvas switches to the next word by itself once it's time. When off, you decide when to move on, so you can keep drawing even after the next word's been announced. Other players can choose independently."
+              />
+              {isWordGiver && (
+                <p className="text-xs text-ink/40 -mt-1 mb-1">
+                  you&apos;re the word giver, so this doesn&apos;t apply to you
+                </p>
+              )}
+            </div>
+          );
+
+          return isHost ? (
           <div className="flex flex-col gap-3 flex-1">
+            <p className="text-xs uppercase tracking-wide text-ink/40 font-semibold">game settings</p>
             <label className="flex flex-col gap-1">
               <span className="text-sm text-ink/50">word giver</span>
               <select
@@ -237,13 +262,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               </label>
             )}
 
-            <div className="border-t border-border-muted pt-2 mt-1 flex flex-col gap-1">
-              <Toggle
-                checked={room.auto_advance_canvas}
-                onChange={handleAutoAdvanceChange}
-                label="canvas changes automatically"
-                info="When on, everyone's canvas switches to the next word by itself once it's time — no clicking needed. When off, you decide when to move on, so you can keep drawing even after the next word's been announced."
-              />
+            <div className="flex flex-col gap-1">
               <Toggle
                 checked={room.mix_drawings}
                 onChange={handleMixDrawingsChange}
@@ -268,6 +287,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               />
             </div>
 
+            <div className="border-t border-border-muted pt-2 mt-1">{privateSettings}</div>
+
             <div className="mt-auto flex flex-col gap-3 pt-3">
               {error && <p className="text-base text-coral-text">{error}</p>}
               <Button onClick={handleStart} disabled={starting}>
@@ -276,10 +297,14 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-base text-ink/50 text-center">waiting for the host to start…</p>
+          <div className="flex-1 flex flex-col">
+            <div className="pt-2">{privateSettings}</div>
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-base text-ink/50 text-center">waiting for the host to start…</p>
+            </div>
           </div>
-        )}
+        );
+        })()}
       </div>
 
       <TutorialCarousel />
