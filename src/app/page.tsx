@@ -58,7 +58,7 @@ export default function WelcomePage() {
 
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-6">
-      <h1 className="font-hand text-5xl font-bold mb-8 -rotate-1">doodle</h1>
+      <h1 className="font-hand text-5xl font-bold mb-8 -rotate-1">Draw n' Guess</h1>
 
       <div className="w-full max-w-xs flex flex-col gap-3">
         <TextInput
