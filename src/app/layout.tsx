@@ -1,29 +1,22 @@
 import type { Metadata } from "next";
-import { Inter, Caveat, Fredoka } from "next/font/google";
 import "./globals.css";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
-
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const caveat = Caveat({
-  variable: "--font-hand",
-  subsets: ["latin"],
-  weight: ["600", "700"],
-});
-
-const fredoka = Fredoka({
-  variable: "--font-fredoka",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
 
 export const metadata: Metadata = {
   title: SITE_NAME,
   description: SITE_TAGLINE,
 };
+
+// The fonts load in the visitor's browser instead of at build time, so a slow or blocked
+// font download can never fail a deploy. The same CSS variables as before point at them.
+const FONTS =
+  "https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Fredoka:wght@400;500;600&family=Inter:wght@100..900&display=swap";
+
+const fontVars = {
+  "--font-sans": "'Inter'",
+  "--font-hand": "'Caveat'",
+  "--font-fredoka": "'Fredoka'",
+} as React.CSSProperties;
 
 export default function RootLayout({
   children,
@@ -31,7 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${caveat.variable} ${fredoka.variable} h-full`}>
+    <html lang="en" className="h-full" style={fontVars}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link rel="stylesheet" href={FONTS} />
+      </head>
       <body className="min-h-full flex flex-col bg-paper text-ink antialiased">
         {children}
       </body>
