@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #fdfcf9;
+  --ink: #1a1a1a;
+  --coral: #f0997b;
+  --coral-text: #4a1b0c;
+  --green: #97c459;
+  --green-text: #173404;
+  --border-muted: #d8d5cc;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-coral: var(--coral);
+  --color-coral-text: var(--coral-text);
+  --color-green: var(--green);
+  --color-green-text: var(--green-text);
+  --color-border-muted: var(--border-muted);
+  --font-sans: var(--font-sans);
+  --font-hand: var(--font-hand);
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.font-hand {
+  font-family: var(--font-hand), cursive;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}

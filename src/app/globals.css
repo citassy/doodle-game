@@ -8,6 +8,18 @@
   --green: #97c459;
   --green-text: #173404;
   --border-muted: #d8d5cc;
+
+  /* Puzzle Together and the hub: butter and rose on off-white */
+  --pt-bg: #faf8f5;
+  --pt-surface: #ffffff;
+  --pt-ink: #5a3a3a;
+  --pt-muted: #9c7d78;
+  --pt-line: #efe5dc;
+  --pt-guide: #e2ccc2;
+  --pt-accent: #be5560;
+  --pt-accent-soft: #f0b7a8;
+  --pt-chip: #f8eee6;
+  --pt-gold: #e3a857;
 }
 
 @theme inline {
@@ -20,6 +32,17 @@
   --color-border-muted: var(--border-muted);
   --font-sans: var(--font-sans);
   --font-hand: var(--font-hand);
+
+  --color-pt-bg: var(--pt-bg);
+  --color-pt-surface: var(--pt-surface);
+  --color-pt-ink: var(--pt-ink);
+  --color-pt-muted: var(--pt-muted);
+  --color-pt-line: var(--pt-line);
+  --color-pt-guide: var(--pt-guide);
+  --color-pt-accent: var(--pt-accent);
+  --color-pt-accent-soft: var(--pt-accent-soft);
+  --color-pt-chip: var(--pt-chip);
+  --color-pt-gold: var(--pt-gold);
 }
 
 body {
@@ -32,4 +55,16 @@ body {
 
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Wrapper for the hub and every Puzzle Together screen. */
+.pt {
+  font-family: var(--font-fredoka), system-ui, sans-serif;
+  color: var(--pt-ink);
+  background: var(--pt-bg);
+}
+
+.pt button,
+.pt input {
+  font-family: inherit;
 }
