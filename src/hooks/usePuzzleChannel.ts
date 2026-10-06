@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { EVENTS, type CursorMsg, type DragMsg, type PresenceMember, type RowsMsg, type SettingsMsg, type TimeMsg } from "@/lib/puzzle/protocol";
+import { EVENTS, type CursorMsg, type DragMsg, type PresenceMember, type RowsMsg, type TimeMsg } from "@/lib/puzzle/protocol";
 
 export interface ChannelHandlers {
   onDrag: (m: DragMsg) => void;
   onRows: (m: RowsMsg) => void;
-  onSettings: (m: SettingsMsg) => void;
   onTime: (m: TimeMsg) => void;
   onCursor: (m: CursorMsg) => void;
 }
@@ -49,7 +48,6 @@ export function usePuzzleChannel(args: {
     channel
       .on("broadcast", { event: EVENTS.drag }, ({ payload }) => handlersRef.current.onDrag(payload as DragMsg))
       .on("broadcast", { event: EVENTS.rows }, ({ payload }) => handlersRef.current.onRows(payload as RowsMsg))
-      .on("broadcast", { event: EVENTS.settings }, ({ payload }) => handlersRef.current.onSettings(payload as SettingsMsg))
       .on("broadcast", { event: EVENTS.time }, ({ payload }) => handlersRef.current.onTime(payload as TimeMsg))
       .on("broadcast", { event: EVENTS.cursor }, ({ payload }) => handlersRef.current.onCursor(payload as CursorMsg))
       .on("presence", { event: "sync" }, () => {
@@ -79,7 +77,6 @@ export function usePuzzleChannel(args: {
 
   const sendDrag = useCallback((m: DragMsg) => send(EVENTS.drag, m), [send]);
   const sendRows = useCallback((m: RowsMsg) => send(EVENTS.rows, m), [send]);
-  const sendSettings = useCallback((m: SettingsMsg) => send(EVENTS.settings, m), [send]);
   const sendTime = useCallback((m: TimeMsg) => send(EVENTS.time, m), [send]);
   const sendCursor = useCallback((m: CursorMsg) => send(EVENTS.cursor, m), [send]);
 
@@ -96,5 +93,5 @@ export function usePuzzleChannel(args: {
   /** The member with the lowest id keeps the clock, so it only ticks once. */
   const isTicker = connected && online.length > 0 && online[0].clientId === meId;
 
-  return { online, connected, isTicker, sendDrag, sendRows, sendSettings, sendTime, sendCursor, setStats };
+  return { online, connected, isTicker, sendDrag, sendRows, sendTime, sendCursor, setStats };
 }

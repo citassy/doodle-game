@@ -15,11 +15,6 @@ export interface RowsMsg {
   elapsed: number;
 }
 
-export interface SettingsMsg {
-  from: string;
-  autoSnap: boolean;
-}
-
 export interface TimeMsg {
   from: string;
   elapsed: number;
@@ -47,7 +42,6 @@ export interface PresenceMember {
 export const EVENTS = {
   drag: "drag",
   rows: "rows",
-  settings: "settings",
   time: "time",
   cursor: "cursor",
 } as const;

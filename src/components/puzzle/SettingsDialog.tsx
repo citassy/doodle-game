@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { PtButton, PtModal, PtSwitch } from "./ui";
 
 export interface RoomSettings {
@@ -17,7 +17,6 @@ function Row({
   onChange,
   disabled,
   indent,
-  note,
 }: {
   title: string;
   hint: string;
@@ -25,14 +24,12 @@ function Row({
   onChange: (v: boolean) => void;
   disabled?: boolean;
   indent?: boolean;
-  note?: ReactNode;
 }) {
   return (
     <div className={`flex items-center justify-between gap-4 py-3.5 ${indent ? "pl-5 border-l-2 border-pt-line ml-1" : ""} ${disabled ? "opacity-60" : ""}`}>
       <div className="min-w-0">
         <div className="font-medium text-[16px]">{title}</div>
         <div className="text-[14px] text-pt-muted leading-snug mt-0.5">{hint}</div>
-        {note && <div className="text-[13px] text-pt-accent mt-1">{note}</div>}
       </div>
       <PtSwitch checked={checked} onChange={onChange} label={title} disabled={disabled} />
     </div>
@@ -41,16 +38,14 @@ function Row({
 
 /**
  * Settings are edited on a copy. Save applies them, the X (or Esc, or a click outside) throws the changes away.
- * Cursors, names and the guide are only for you; auto snap is shared, so only the host can change it.
+ * Every setting here is only for you. Nobody else in the room is affected.
  */
 export function SettingsDialog({
   initial,
-  isHost,
   onSave,
   onClose,
 }: {
   initial: RoomSettings;
-  isHost: boolean;
   onSave: (next: RoomSettings) => void;
   onClose: () => void;
 }) {
@@ -81,11 +76,9 @@ export function SettingsDialog({
         <Row title="Guide" hint="A faint dashed outline showing where the finished puzzle goes." checked={draft.guide} onChange={(v) => set("guide", v)} />
         <Row
           title="Auto snap"
-          hint="Matching pieces join by themselves when they get close. This is the same for everyone in the room."
+          hint="Matching pieces join by themselves when you let go close to them. Off gives you a Snap button instead."
           checked={draft.autoSnap}
           onChange={(v) => set("autoSnap", v)}
-          disabled={!isHost}
-          note={!isHost ? "Only the host can change this." : undefined}
         />
       </div>
 

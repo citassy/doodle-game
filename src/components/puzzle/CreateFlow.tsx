@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Cropper from "react-easy-crop";
-import { PtButton, PtInput, PtSwitch } from "./ui";
+import { PtButton, PtInput } from "./ui";
 import { ASPECTS, defaultPresetIndex, presetsFor, aspectById } from "@/lib/puzzle/presets";
 import {
   cropToBlob,
@@ -63,7 +63,6 @@ export function CreateFlow() {
   // step 3
   const [cropped, setCropped] = useState<(Cropped & { previewUrl: string }) | null>(null);
   const [presetIdx, setPresetIdx] = useState(0);
-  const [autoSnap, setAutoSnap] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -141,7 +140,7 @@ export function CreateFlow() {
         cols: preset.cols,
         rows: preset.rows,
         mode: "coop",
-        autoSnap,
+        autoSnap: true, // everyone can switch it off for themselves in the room settings
       });
       router.push(`/puzzle-together/${code}`);
     } catch (e) {
@@ -253,8 +252,6 @@ export function CreateFlow() {
             aspect={aspect}
             presetIdx={presetIdx}
             setPresetIdx={setPresetIdx}
-            autoSnap={autoSnap}
-            setAutoSnap={setAutoSnap}
             busy={busy}
             onCreate={create}
           />
@@ -327,12 +324,10 @@ function SettingsStep(props: {
   aspect: AspectId;
   presetIdx: number;
   setPresetIdx: (n: number) => void;
-  autoSnap: boolean;
-  setAutoSnap: (v: boolean) => void;
   busy: boolean;
   onCreate: () => void;
 }) {
-  const { cropped, aspect, presetIdx, setPresetIdx, autoSnap, setAutoSnap, busy, onCreate } = props;
+  const { cropped, aspect, presetIdx, setPresetIdx, busy, onCreate } = props;
   const presets = presetsFor(aspect);
   const a = aspectById(aspect);
   return (
@@ -387,14 +382,6 @@ function SettingsStep(props: {
               <div className="text-[13px] text-pt-muted leading-snug mt-1">Everyone gets their own copy. Coming soon.</div>
             </div>
           </div>
-        </section>
-
-        <section className="flex items-center justify-between gap-4">
-          <div>
-            <div className="font-medium">Auto snap</div>
-            <div className="text-[13px] text-pt-muted leading-snug">Matching pieces join on their own. Off means a Snap button.</div>
-          </div>
-          <PtSwitch checked={autoSnap} onChange={setAutoSnap} label="Auto snap" />
         </section>
 
         <PtButton onClick={onCreate} disabled={busy} className="w-full">

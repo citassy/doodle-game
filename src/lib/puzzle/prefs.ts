@@ -3,9 +3,10 @@ export interface ViewPrefs {
   guide: boolean;
   cursors: boolean;
   names: boolean;
+  autoSnap: boolean;
 }
 
-export const DEFAULT_PREFS: ViewPrefs = { guide: true, cursors: true, names: true };
+export const DEFAULT_PREFS: ViewPrefs = { guide: true, cursors: true, names: true, autoSnap: true };
 
 const KEY = "puzzle:prefs";
 
@@ -18,6 +19,7 @@ export function loadPrefs(): ViewPrefs {
       guide: typeof p.guide === "boolean" ? p.guide : DEFAULT_PREFS.guide,
       cursors: typeof p.cursors === "boolean" ? p.cursors : DEFAULT_PREFS.cursors,
       names: typeof p.names === "boolean" ? p.names : DEFAULT_PREFS.names,
+      autoSnap: typeof p.autoSnap === "boolean" ? p.autoSnap : DEFAULT_PREFS.autoSnap,
     };
   } catch {
     return DEFAULT_PREFS;

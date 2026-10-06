@@ -16,14 +16,13 @@ import { pushSamples, type CursorTrack } from "@/lib/puzzle/cursorTrack";
 import { loadPrefs, savePrefs, type ViewPrefs } from "@/lib/puzzle/prefs";
 import { makeGeometry } from "@/lib/puzzle/shapes";
 import { loadImage } from "@/lib/puzzle/imageTools";
-import type { CursorMsg, DragMsg, RowsMsg, SettingsMsg, TimeMsg } from "@/lib/puzzle/protocol";
+import type { CursorMsg, DragMsg, RowsMsg, TimeMsg } from "@/lib/puzzle/protocol";
 import {
   addTime,
   imageUrl,
   loadPuzzle,
   markSolved,
   persistRows,
-  setAutoSnapSetting,
   touchRoom,
   upsertPlayer,
   type LoadedPuzzle,
@@ -133,6 +132,7 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
   const { room, board } = data;
   const clientId = me.client_id;
 
+  // Auto snap starts on; whether it stays on is each person's own setting (see the effect below).
   const game = useMemo(() => {
     const g = makeGeometry({
       seed: room.seed,
@@ -141,7 +141,7 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
       imageW: room.image_width,
       imageH: room.image_height,
     });
-    return new PuzzleGame(g, data.pieces, room.auto_snap);
+    return new PuzzleGame(g, data.pieces, true);
     // the board is built once per room visit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board.id]);
@@ -163,7 +163,6 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
   const [ui, setUi] = useState<BoardUi>({ zoom: 0.5, selectedCount: 0, canSnap: false, selRect: null, dragging: false });
   const [prefs, setPrefs] = useState<ViewPrefs>(loadPrefs);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [autoSnap, setAutoSnap] = useState(room.auto_snap);
   const [barOpen, setBarOpen] = useState(true);
   const [lightbox, setLightbox] = useState(false);
   const [solved, setSolved] = useState(board.solved_at !== null || game.solved);
@@ -269,10 +268,6 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
           setShowSolved(true);
         }
       },
-      onSettings: (m: SettingsMsg) => {
-        game.setAutoSnap(m.autoSnap);
-        setAutoSnap(m.autoSnap);
-      },
       onTime: (m: TimeMsg) => {
         if (!solvedRef.current) setClock(m.elapsed);
       },
@@ -285,12 +280,15 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
       },
     },
   });
-  const { online, connected, isTicker, sendDrag, sendRows, sendSettings, sendTime, sendCursor, setStats } = channel;
+  const { online, connected, isTicker, sendDrag, sendRows, sendTime, sendCursor, setStats } = channel;
 
-  // keep the guide in step with the setting
+  // keep the guide and auto snap in step with this person's settings
   useEffect(() => {
     handleRef.current?.setShowGuide(prefs.guide);
   }, [prefs.guide]);
+  useEffect(() => {
+    game.setAutoSnap(prefs.autoSnap);
+  }, [game, prefs.autoSnap]);
 
   // Our own numbers for the avatar card: time in the room and joins made. They are kept on this device (per puzzle),
   // so a refresh doesn't reset them, and shared with everyone through presence.
@@ -472,17 +470,6 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
     sendDrag({ from: clientId, color: me.color, items: game.livePositions() });
   }, [sendDrag, clientId, game, me.color]);
 
-  const setAutoSnapTo = async (next: boolean) => {
-    setAutoSnap(next);
-    game.setAutoSnap(next);
-    sendSettings({ from: clientId, autoSnap: next });
-    try {
-      await setAutoSnapSetting(room.id, next);
-    } catch {
-      /* the live broadcast already reached everyone present */
-    }
-  };
-
   // ------------------------------------------------------------------ view --
   const players: BarPlayer[] = useMemo(() => {
     const onlineIds = new Set(online.map((o) => o.clientId));
@@ -499,13 +486,11 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
   }, [data.players, online]);
 
   const aspect = room.image_width / room.image_height;
-  const isHost = room.host_client_id === clientId;
 
   const saveSettings = (next: RoomSettings) => {
-    const p: ViewPrefs = { guide: next.guide, cursors: next.cursors, names: next.names };
+    const p: ViewPrefs = { guide: next.guide, cursors: next.cursors, names: next.names, autoSnap: next.autoSnap };
     setPrefs(p);
     savePrefs(p);
-    if (isHost && next.autoSnap !== autoSnap) void setAutoSnapTo(next.autoSnap);
     setSettingsOpen(false);
   };
 
@@ -542,7 +527,7 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
 
       <Thumbnail src={src} aspect={aspect} onClick={() => setLightbox(true)} />
       <ZoomPill zoom={ui.zoom} onZoom={(f) => handleRef.current?.zoomBy(f)} onFit={() => handleRef.current?.fit()} />
-      {!autoSnap && !solved && <SnapButton enabled={ui.canSnap} onClick={() => handleRef.current?.snap()} />}
+      {!prefs.autoSnap && !solved && <SnapButton enabled={ui.canSnap} onClick={() => handleRef.current?.snap()} />}
 
       {imageFailed && (
         <div role="alert" className="absolute left-1/2 top-24 -translate-x-1/2 z-20 rounded-full bg-pt-surface border-2 border-pt-line px-5 py-2 text-sm text-pt-accent">
@@ -559,8 +544,7 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
 
       {settingsOpen && (
         <SettingsDialog
-          initial={{ cursors: prefs.cursors, names: prefs.names, guide: prefs.guide, autoSnap }}
-          isHost={isHost}
+          initial={{ cursors: prefs.cursors, names: prefs.names, guide: prefs.guide, autoSnap: prefs.autoSnap }}
           onSave={saveSettings}
           onClose={() => setSettingsOpen(false)}
         />
