@@ -57,6 +57,13 @@ export const HUB_CSS = `
 .hub-play{font-family:var(--hub-sans),system-ui,sans-serif;letter-spacing:0;text-transform:none;font-size:14px;font-weight:600;padding:9px 18px;border-radius:999px;background:#F8E8DE;color:#7C6B5E;transition:background .18s,color .18s;white-space:nowrap}
 .hub-card:hover .hub-play,.hub-card:focus-visible .hub-play{background:var(--gc);color:#fff}
 .hub-soon{grid-column:1/-1;border:1.5px dashed #E6CFC2;border-radius:22px;color:#A8957F;display:flex;align-items:center;justify-content:center;min-height:96px;font-family:var(--hub-mono),ui-monospace,monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.hub-foot{margin-top:72px;border-top:1.5px solid var(--line);padding:34px 0 0;text-align:center}
+.hub-foot-brand{display:inline-flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
+.hub-foot-brand b{width:18px;height:18px;background:currentColor;display:block;border-radius:6px}
+.hub-foot-tag{margin:8px 0 0;color:var(--muted);font-size:14.5px}
+.hub-foot-made{margin:18px 0 0;color:#A8957F;font-size:13px;line-height:1.5}
+.hub-foot-made .heart{color:#BE5560}
+.hub-foot-made strong{color:var(--muted);font-weight:600}
 @media (prefers-reduced-motion:reduce){.hub-card,.hub-art-svg,.hub-cursor,.hub-name,.hub-play,.hub-ft{transition:none}.hub-card:hover{transform:none}}
 `;
 
@@ -94,6 +101,18 @@ export function Hub() {
             <div className="hub-soon">More games soon</div>
           </div>
         </main>
+
+        <footer className="hub-foot">
+          <span className="hub-foot-brand">
+            <b />
+            {SITE_NAME}
+          </span>
+          <p className="hub-foot-tag">{SITE_TAGLINE}</p>
+          <p className="hub-foot-made">
+            Made with <span className="heart" aria-label="love">♥</span> by <strong>Mai Phuong Vu</strong> for people who miss each other
+            <br />© {new Date().getFullYear()} {SITE_NAME}
+          </p>
+        </footer>
       </div>
     </div>
   );
