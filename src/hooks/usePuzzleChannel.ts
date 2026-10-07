@@ -10,6 +10,8 @@ export interface ChannelHandlers {
   onRows: (m: RowsMsg) => void;
   onTime: (m: TimeMsg) => void;
   onCursor: (m: CursorMsg) => void;
+  /** The connection came back (or we woke up). Messages may have been missed, so reload the board from the database. */
+  onResync: () => void;
 }
 
 /**
@@ -31,6 +33,10 @@ export function usePuzzleChannel(args: {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [online, setOnline] = useState<PresenceMember[]>([]);
   const [connected, setConnected] = useState(false);
+  const [everConnected, setEverConnected] = useState(false);
+  const [epoch, setEpoch] = useState(0); // bump to throw the channel away and open a fresh one
+  const joinedBefore = useRef(false);
+
   const statsRef = useRef<{ secs?: number; joins?: number }>({});
 
   const meId = me?.clientId;
@@ -60,6 +66,9 @@ export function usePuzzleChannel(args: {
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           setConnected(true);
+          setEverConnected(true);
+          if (joinedBefore.current) handlersRef.current.onResync();
+          joinedBefore.current = true;
           await channel.track({ clientId: meId, name: meName ?? "", color: meColor ?? "#BE5560", ...statsRef.current });
         }
       });
@@ -69,7 +78,40 @@ export function usePuzzleChannel(args: {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [boardId, meId, meName, meColor]);
+  }, [boardId, meId, meName, meColor, epoch]);
+
+  // Watchdog. The live connection can drop without anyone noticing (sleep, wifi change, a tab left in the background).
+  // If the channel isn't joined for two checks in a row, or when the tab wakes up, open a fresh one and catch up.
+  useEffect(() => {
+    if (!boardId || !meId) return;
+    let bad = 0;
+    const check = () => {
+      const ch = channelRef.current;
+      if (!ch) return;
+      if ((ch.state as string) === "joined") {
+        bad = 0;
+        return;
+      }
+      if (++bad >= 2) {
+        bad = 0;
+        setEpoch((e) => e + 1);
+      }
+    };
+    const timer = setInterval(check, 4000);
+    const wake = () => {
+      if (document.visibilityState !== "visible") return;
+      bad = 1;
+      check();
+      handlersRef.current.onResync(); // we may have missed moves while away
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("online", wake);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("online", wake);
+    };
+  }, [boardId, meId]);
 
   const send = useCallback((event: string, payload: unknown) => {
     channelRef.current?.send({ type: "broadcast", event, payload });
@@ -84,8 +126,12 @@ export function usePuzzleChannel(args: {
   const setStats = useCallback(
     (s: { secs: number; joins: number }) => {
       statsRef.current = s;
-      if (!connected || !channelRef.current || !meId) return;
-      void channelRef.current.track({ clientId: meId, name: meName ?? "", color: meColor ?? "#BE5560", ...s });
+      const ch = channelRef.current;
+      if (!connected || !ch || !meId) return;
+      // This also works as a health check: if the server doesn't answer, the connection is dead, so start over.
+      void ch.track({ clientId: meId, name: meName ?? "", color: meColor ?? "#BE5560", ...s }).then((r) => {
+        if (r !== "ok" && channelRef.current === ch) setEpoch((e) => e + 1);
+      });
     },
     [connected, meId, meName, meColor]
   );
@@ -93,5 +139,5 @@ export function usePuzzleChannel(args: {
   /** The member with the lowest id keeps the clock, so it only ticks once. */
   const isTicker = connected && online.length > 0 && online[0].clientId === meId;
 
-  return { online, connected, isTicker, sendDrag, sendRows, sendTime, sendCursor, setStats };
+  return { online, connected, reconnecting: everConnected && !connected, isTicker, sendDrag, sendRows, sendTime, sendCursor, setStats };
 }

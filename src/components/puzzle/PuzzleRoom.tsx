@@ -10,6 +10,7 @@ import { RemoteCursors } from "./RemoteCursors";
 import { SettingsDialog, type RoomSettings } from "./SettingsDialog";
 import { PtButton, PtInput } from "./ui";
 import { usePuzzleChannel } from "@/hooks/usePuzzleChannel";
+import { createClient } from "@/lib/supabase/client";
 import { getLocalPlayerId, getSavedName, saveName } from "@/lib/localPlayer";
 import { PuzzleGame, type Change } from "@/lib/puzzle/game";
 import { pushSamples, type CursorTrack } from "@/lib/puzzle/cursorTrack";
@@ -17,6 +18,7 @@ import { loadPrefs, savePrefs, type ViewPrefs } from "@/lib/puzzle/prefs";
 import { makeGeometry } from "@/lib/puzzle/shapes";
 import { loadImage } from "@/lib/puzzle/imageTools";
 import type { CursorMsg, DragMsg, RowsMsg, TimeMsg } from "@/lib/puzzle/protocol";
+import type { PieceRow } from "@/lib/puzzle/types";
 import {
   addTime,
   imageUrl,
@@ -247,6 +249,33 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
 
   const pointersRef = useRef(new Map<string, CursorTrack>());
 
+  // After the connection was lost (or the tab slept) we may have missed other people's moves, so reload the pieces
+  // from the database. We wait if we're in the middle of dragging, so it can't yank a piece out of our hand.
+  const draggingRef = useRef(false);
+  const resyncing = useRef(false);
+  const resync = useCallback(async () => {
+    if (resyncing.current) return;
+    resyncing.current = true;
+    try {
+      for (let i = 0; i < 10 && draggingRef.current; i++) await new Promise((r) => setTimeout(r, 400));
+      const { data } = await createClient().from("puzzle_pieces").select("idx,x,y,rot,cluster").eq("board_id", board.id);
+      if (!data) return;
+      game.applyRemoteRows(data as PieceRow[]);
+      heldRef.current.clear();
+      pushHeld();
+      pointersRef.current.clear();
+      handleRef.current?.invalidate();
+      if (game.solved && !solvedRef.current) {
+        setSolved(true);
+        setShowSolved(true);
+      }
+    } catch {
+      /* the next reconnect or wake-up tries again */
+    } finally {
+      resyncing.current = false;
+    }
+  }, [board.id, game, pushHeld]);
+
   const channel = usePuzzleChannel({
     boardId: board.id,
     me: { clientId, name: me.name, color: me.color },
@@ -271,6 +300,7 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
       onTime: (m: TimeMsg) => {
         if (!solvedRef.current) setClock(m.elapsed);
       },
+      onResync: () => void resync(),
       onCursor: (m: CursorMsg) => {
         // put the batch on our own clock: each point happened `t` ms before it was sent
         const now = performance.now();
@@ -280,7 +310,11 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
       },
     },
   });
-  const { online, connected, isTicker, sendDrag, sendRows, sendTime, sendCursor, setStats } = channel;
+  const { online, connected, reconnecting, isTicker, sendDrag, sendRows, sendTime, sendCursor, setStats } = channel;
+
+  useEffect(() => {
+    draggingRef.current = ui.dragging;
+  }, [ui.dragging]);
 
   // keep the guide and auto snap in step with this person's settings
   useEffect(() => {
@@ -529,6 +563,11 @@ function RoomBoard({ data, me }: { data: LoadedPuzzle; me: PuzzlePlayer }) {
       <ZoomPill zoom={ui.zoom} onZoom={(f) => handleRef.current?.zoomBy(f)} onFit={() => handleRef.current?.fit()} />
       {!prefs.autoSnap && !solved && <SnapButton enabled={ui.canSnap} onClick={() => handleRef.current?.snap()} />}
 
+      {reconnecting && (
+        <div role="status" className="absolute left-1/2 top-24 -translate-x-1/2 z-20 rounded-full bg-pt-surface border-2 border-pt-line px-5 py-2 text-sm text-pt-muted">
+          Reconnecting… your moves are saved.
+        </div>
+      )}
       {imageFailed && (
         <div role="alert" className="absolute left-1/2 top-24 -translate-x-1/2 z-20 rounded-full bg-pt-surface border-2 border-pt-line px-5 py-2 text-sm text-pt-accent">
           The picture didn&apos;t load. Check your connection and refresh.
